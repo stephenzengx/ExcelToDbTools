@@ -151,10 +151,11 @@ namespace ExcelTools
 
         public static Dictionary<string, List<TbDesc>> GetTableNamesAndFieldDic(this IDbConnection con, string dbname,ref Dictionary<string, List<TbDesc>> dic)
         {
+            dbname = dbname.ToLower();
             DynamicParameters Parameters = new DynamicParameters();
             Parameters.Add("dbname", dbname);
 
-            var dbsql = @"select table_name from information_schema.tables where table_schema=@dbname"; //__efmigrationshistory
+            var dbsql = @"select LOWER(table_name) from information_schema.tables where table_schema=@dbname"; //__efmigrationshistory
             var tbNameList = con.Query<string>(dbsql, Parameters);
             if (tbNameList.Count() <= 0)
             {
