@@ -709,7 +709,7 @@ namespace Excel.OpenXml
         /// <returns></returns>
         public ReadExcelDataRet GetSheetExecSql(string sheetName,string dbName, string tbName, 
             List<TbDesc> tbDescs, List<ScanExcelHeadDesc> scanDescs, string JGIDFieldName,
-            string JGID,ref int remainErrorCount, 
+            string JGID, ref int remainErrorCount,
             ref Dictionary<string, List<string>> uniqDataDic,
             string startCell = "A1", IConfiguration configuration = null)
         {
@@ -766,7 +766,7 @@ namespace Excel.OpenXml
                         {
                             var existFlag = false;
                             //uniqDataDic key:db.tbname.uniqFieldName
-                            if (uniqDataDic.TryGetValue($"{dbName}.{tbName}.{scanDescs[i].FieldName}", out var list))
+                            if (    uniqDataDic.TryGetValue($"{dbName}.{tbName}.{scanDescs[i].FieldName}", out var list))
                             {
                                 existFlag = true;
                                 if (convertValue!=null && list.Contains(convertValue.ToString()))
@@ -799,7 +799,7 @@ namespace Excel.OpenXml
                 }
 
                 ret.AllRowCount++;
-                if (rowItemPassCount==row.Count)
+                if (rowItemPassCount== scanDescs.Count)
                 {
                     ret.RowIndexs.Add(rowIndex++);
                     DynamicParameters parm = DbConnectionExtensions.GetBaseDynamicParameters(JGIDFieldName,JGID,isExistJybs);

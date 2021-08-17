@@ -37,7 +37,6 @@ namespace ExcelTools
             this.LbMaxErrorCount = new System.Windows.Forms.Label();
             this.TxtMaxErrorCount = new System.Windows.Forms.TextBox();
             this.LbRemark = new System.Windows.Forms.Label();
-            this.BtnImportOrg = new System.Windows.Forms.Button();
             this.LbOrgName = new System.Windows.Forms.Label();
             this.DrpDwnOrgs = new System.Windows.Forms.ComboBox();
             this.BtnReloadJson = new System.Windows.Forms.Button();
@@ -49,7 +48,7 @@ namespace ExcelTools
             this.TxtDirPath.Name = "TxtDirPath";
             this.TxtDirPath.Size = new System.Drawing.Size(162, 23);
             this.TxtDirPath.TabIndex = 0;
-            this.TxtDirPath.Text = "F:/Excel导入测试";
+            this.TxtDirPath.Text = "F:/Excel导入测试_816";
             // 
             // BtnStartImport
             // 
@@ -113,16 +112,6 @@ namespace ExcelTools
             this.LbRemark.TabIndex = 10;
             this.LbRemark.Text = "备注：导入时，如果检查出的错误记录条数大于阈值,直接退出程序";
             // 
-            // BtnImportOrg
-            // 
-            this.BtnImportOrg.Location = new System.Drawing.Point(454, 112);
-            this.BtnImportOrg.Name = "BtnImportOrg";
-            this.BtnImportOrg.Size = new System.Drawing.Size(91, 23);
-            this.BtnImportOrg.TabIndex = 18;
-            this.BtnImportOrg.Text = "导入机构";
-            this.BtnImportOrg.UseVisualStyleBackColor = true;
-            this.BtnImportOrg.Click += new System.EventHandler(this.BtnImportOrgs_Click);
-            // 
             // LbOrgName
             // 
             this.LbOrgName.AutoSize = true;
@@ -158,7 +147,6 @@ namespace ExcelTools
             this.ClientSize = new System.Drawing.Size(748, 515);
             this.Controls.Add(this.BtnReloadJson);
             this.Controls.Add(this.DrpDwnOrgs);
-            this.Controls.Add(this.BtnImportOrg);
             this.Controls.Add(this.LbOrgName);
             this.Controls.Add(this.LbRemark);
             this.Controls.Add(this.TxtMaxErrorCount);
@@ -186,7 +174,6 @@ namespace ExcelTools
         private System.Windows.Forms.Label LbMaxErrorCount;
         private System.Windows.Forms.TextBox TxtMaxErrorCount;
         private System.Windows.Forms.Label LbRemark;
-        private System.Windows.Forms.Button BtnImportOrg;
         private System.Windows.Forms.Label LbOrgName;
         private System.Windows.Forms.ComboBox DrpDwnOrgs;
         private System.Windows.Forms.Button BtnReloadJson;

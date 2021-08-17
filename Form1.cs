@@ -47,6 +47,8 @@ namespace ExcelTools
         public Form1()
         {
             InitializeComponent();
+
+            OrgsInit();
         }
 
         private void EditControlsStatuReset()
@@ -64,16 +66,17 @@ namespace ExcelTools
         /// <param name="e"></param>
         private void ImportBtn_Click(object sender, EventArgs e)
         {
+            //其他按钮禁止修改
+            TxtDirPath.Enabled = false;
+            DrpDwnOrgs.Enabled = false;
+            TxtMaxErrorCount.Enabled = false;
+
+            #region 校验
             if (!HasPassFileValid)
             {
                 DiagTip("文件校验未通过，请先校验！");
                 return;
             }
-
-            //其他按钮禁止修改
-            TxtDirPath.Enabled = false;
-            DrpDwnOrgs.Enabled = false;
-            TxtMaxErrorCount.Enabled = false;
 
             if (string.IsNullOrEmpty(JGID))
             {
@@ -82,13 +85,12 @@ namespace ExcelTools
                 return;
             }
 
-            if ( LastImportTime!=null && (DateTime.Now - LastImportTime)?.Seconds <= Seconds)
+            if (LastImportTime != null && (DateTime.Now - LastImportTime)?.Seconds <= Seconds)
             {
                 DiagTip($"操作频率过快,{Seconds}s后再试！");
                 EditControlsStatuReset();
                 return;
             }
-            LastImportTime = DateTime.Now;
 
             if (RemainErrorCount <= 0)
             {
@@ -96,7 +98,10 @@ namespace ExcelTools
                 EditControlsStatuReset();
                 return;
             }
+            #endregion
 
+            LastImportTime = DateTime.Now;
+            //导入前清空
             if (ClearTbDic.Count > 0)
             {
                 //弹窗
@@ -121,6 +126,7 @@ namespace ExcelTools
             ComfirmImportData();
             HasPassFileValid = false;
             EditControlsStatuReset();
+            ValidateInit();
         }
 
         /// <summary>
@@ -220,8 +226,6 @@ namespace ExcelTools
             ExecSqlFinalDic = new Dictionary<string, ReadExcelDataRet>();
             UniqDataDic = new Dictionary<string, List<string>>();
             RelatedDataDic = new Dictionary<string, Dictionary<string, string>>();
-
-            LastValidateTime = DateTime.Now;
         }
 
         /// <summary>
@@ -254,6 +258,7 @@ namespace ExcelTools
                 }
 
                 ValidateInit();//数据初始化
+                LastValidateTime = DateTime.Now;
                 if (!ValidateBase(TxtDirPath.Text, TxtMaxErrorCount.Text, ref Files, out MaxErrorCount))//初始化操作
                     return;
                 RemainErrorCount = MaxErrorCount;
@@ -293,7 +298,7 @@ namespace ExcelTools
                         return;
                     }
 
-                    var dbName = dbStrArr[0];
+                    var dbName = dbStrArr[0].ToLower();
                     var connectionString = Utils.Config.GetConnectionString(dbStrArr[0]);
                     if (string.IsNullOrEmpty(connectionString))
                     {
@@ -346,7 +351,7 @@ namespace ExcelTools
                                 return;
                             }
 
-                            var tbname = sheetSpitArray[0];
+                            var tbname = sheetSpitArray[0].ToLower();
                             if (tbNameList.Any(m => m.Equals(tbname)))
                             {
                                 Utils.LogInfo($"sheet名'{sheetName}'-关联表名'{tbname}'重复出现，请检查!");
@@ -386,26 +391,33 @@ namespace ExcelTools
                 #endregion
 
                 #region 数据库提前取出 关联数据 (唯一，关联)
-                foreach (var eachDbScanDesc in ScanDescDic)
+                foreach (var eachDbScanDesc in ScanDescDic)//dbname:[dbname.tbname : list]
                 {
-                    var connectionString = Utils.Config.GetConnectionString(eachDbScanDesc.Key);
+                    
+                    var dbname = eachDbScanDesc.Key;
+                    var retDic = ClearTbDic.TryGetValue(dbname, out var ClearTbNameList); // [dbname: list<string>]
+                    var connectionString = Utils.Config.GetConnectionString(dbname);
                     using (IDbConnection con = new MySqlConnection(connectionString))
                     {
                         con.Open();
                         foreach (var tbScanDesc in eachDbScanDesc.Value)
                         {
-                            var tbname = tbScanDesc.Key;
-                            var uniqDescs = tbScanDesc.Value.Where(m => m.Prefix.Contains(Config[EnumIdentifier.Unique.ToString()]));
-                            if (uniqDescs.Count() > 0)
+                            var fullTbName = tbScanDesc.Key;
+                            //当前sheet表 导入前被清空了，无需唯一性
+                            if (!retDic || !ClearTbNameList.Contains(fullTbName.Split(Config[EnumIdentifier.Dot.ToString()]).ToList()[1]))
                             {
-                                foreach (var uniqDesc in uniqDescs)
+                                var uniqDescs = tbScanDesc.Value.Where(m => m.Prefix.Contains(Config[EnumIdentifier.Unique.ToString()]));
+                                if (uniqDescs.Count() > 0)
                                 {
-                                    List<string> ret = con.GetUniqFieldValues(tbname, uniqDesc.FieldName, Config[(eachDbScanDesc.Key + "_JGIDName")], JGID);
-                                    if (ret.Count > 0)
+                                    foreach (var uniqDesc in uniqDescs)
                                     {
-                                        //唯一数据 key: db.tbname.uniqFieldName
-                                        UniqDataDic.Add($"{tbname}.{uniqDesc.FieldName}", ret);
+                                        List<string> ret = con.GetUniqFieldValues(fullTbName, uniqDesc.FieldName, Config[(eachDbScanDesc.Key + "_JGIDName")], JGID);
+                                        if (ret.Count > 0)
+                                        {
+                                            //唯一数据 key: db.tbname.uniqFieldName
+                                            UniqDataDic.Add($"{fullTbName}.{uniqDesc.FieldName}", ret);
 
+                                        }
                                     }
                                 }
                             }
@@ -415,12 +427,15 @@ namespace ExcelTools
                             {
                                 foreach (var rlDesc in rlDescs)
                                 {
-                                    var ret = con.GetDicValues(rlDesc.RelatedTbName, rlDesc.KeyFieldName, rlDesc.ValueFieldName,Config[(eachDbScanDesc.Key + "_JGIDName")], JGID);
-                                    //关联基础数据数据 key:dbname.tbname-keyFieldname-valueFieldname
-                                    RelatedDataDic.Add($"{rlDesc.RelatedTbName}.{rlDesc.KeyFieldName}.{rlDesc.ValueFieldName}", ret);
+                                    //当前sheet表关联表被清空，无需去取数据库关联数据
+                                    if (!retDic && !ClearTbNameList.Contains(rlDesc.RelatedTbName.Split(Config[EnumIdentifier.Dot.ToString()]).ToList()[1]))
+                                    {
+                                        var ret = con.GetDicValues(rlDesc.RelatedTbName, rlDesc.KeyFieldName, rlDesc.ValueFieldName, Config[(eachDbScanDesc.Key + "_JGIDName")], JGID);
+                                        //关联基础数据数据 key:dbname.tbname-keyFieldname-valueFieldname
+                                        RelatedDataDic.Add($"{rlDesc.RelatedTbName}.{rlDesc.KeyFieldName}.{rlDesc.ValueFieldName}", ret);
+                                    }
                                 }
                             }
-
                         }
                     }
                 }
@@ -435,6 +450,9 @@ namespace ExcelTools
                     var JGIDFieldName = Config[dbStrArr[0] + "_JGIDName"];
                     Utils.LogInfo($"Excel表: {file.Name} --------");
                     var sheetNames = MyMiniExcel.GetSheetNames(file.FullName);
+
+                    var isExistClearTbName = ClearTbDic.TryGetValue(dbStrArr[0], out var tbNameList);
+
                     using (FileStream stream = Helpers.OpenSharedRead(file.FullName))
                     {
                         var xmlSheetReader = new ExcelOpenXmlSheetReader(stream);
@@ -597,14 +615,9 @@ namespace ExcelTools
             }
         }
 
-        /// <summary>
-        /// 导入机构
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        private void BtnImportOrgs_Click(object sender, EventArgs e)
+        private void OrgsInit()
         {
-            Console.WriteLine("开始导入机构....");
+            Console.WriteLine("正在读取机构信息....");
             var connectString = Config.GetConnectionString(Config["OrgDb"]);
             if (string.IsNullOrEmpty(connectString))
             {
@@ -633,8 +646,8 @@ namespace ExcelTools
             DrpDwnOrgs.DataSource = infoList;
             DrpDwnOrgs.ValueMember = "Id";
             DrpDwnOrgs.DisplayMember = "Mc";
-            Console.WriteLine("导入机构 成功！");
-            DiagTip("导入成功！",MessageBoxIcon.Information);
+            Console.WriteLine("读取机构信息 成功！");
+            //DiagTip("导入成功！", MessageBoxIcon.Information);
         }
 
         /// <summary>
