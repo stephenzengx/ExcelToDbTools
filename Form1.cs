@@ -75,6 +75,7 @@ namespace ExcelTools
             if (!HasPassFileValid)
             {
                 DiagTip("文件校验未通过，请先校验！");
+                EditControlsStatuReset();
                 return;
             }
 
@@ -411,12 +412,14 @@ namespace ExcelTools
                                 {
                                     foreach (var uniqDesc in uniqDescs)
                                     {
+                                        if (UniqDataDic.TryGetValue($"{fullTbName}.{uniqDesc.FieldName}", out var _ret))//多个表都关联了这个表，避免键值对重复
+                                            continue;
+
                                         List<string> ret = con.GetUniqFieldValues(fullTbName, uniqDesc.FieldName, Config[(eachDbScanDesc.Key + "_JGIDName")], JGID);
                                         if (ret.Count > 0)
                                         {
                                             //唯一数据 key: db.tbname.uniqFieldName
                                             UniqDataDic.Add($"{fullTbName}.{uniqDesc.FieldName}", ret);
-
                                         }
                                     }
                                 }
@@ -427,8 +430,11 @@ namespace ExcelTools
                             {
                                 foreach (var rlDesc in rlDescs)
                                 {
+                                    if (RelatedDataDic.TryGetValue($"{rlDesc.RelatedTbName}.{rlDesc.KeyFieldName}.{rlDesc.ValueFieldName}", out var _ret))//多个表都关联了这个表，避免键值对重复
+                                        continue;
+
                                     //当前sheet表关联表被清空，无需去取数据库关联数据
-                                    if (!retDic && !ClearTbNameList.Contains(rlDesc.RelatedTbName.Split(Config[EnumIdentifier.Dot.ToString()]).ToList()[1]))
+                                    if (!retDic || !ClearTbNameList.Contains(rlDesc.RelatedTbName.Split(Config[EnumIdentifier.Dot.ToString()]).ToList()[1]))
                                     {
                                         var ret = con.GetDicValues(rlDesc.RelatedTbName, rlDesc.KeyFieldName, rlDesc.ValueFieldName, Config[(eachDbScanDesc.Key + "_JGIDName")], JGID);
                                         //关联基础数据数据 key:dbname.tbname-keyFieldname-valueFieldname

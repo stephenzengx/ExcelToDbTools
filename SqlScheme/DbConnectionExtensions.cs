@@ -180,10 +180,15 @@ namespace ExcelTools
             return con.Query<string>(tbsql, parameters).ToList();
         }
 
-        public static Dictionary<string,string> GetDicValues(this IDbConnection con, string tbName, string keyFieldName, string valueFieldName, string JGIDFieldName, string JGID)
+        public static Dictionary<string,string> GetDicValues(this IDbConnection con, string fullTbName, string keyFieldName, string valueFieldName, string JGIDFieldName, string JGID)
         {
+            if (fullTbName.Equals("ihdb_lgfy.t_base_presthreetype"))
+            {
+                Console.WriteLine();
+            }
+
             var dic = new Dictionary<string, string>();
-            string tbsql = $"select {keyFieldName} as RKey, {valueFieldName} as RValue from {tbName} where {JGIDFieldName} = @JGID;";
+            string tbsql = $"select {keyFieldName} as RKey, {valueFieldName} as RValue from {fullTbName} where {JGIDFieldName} = @JGID;";
 
             DynamicParameters parameters = new DynamicParameters();
             parameters.Add("JGID", JGID);
