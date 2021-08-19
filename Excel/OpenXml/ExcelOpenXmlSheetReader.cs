@@ -638,7 +638,7 @@ namespace Excel.OpenXml
 
                         if (!rTbDesc.Any(m => m.FieldName.Equals(rFields[0])))
                         {
-                            ExcelTools.Utils.LogInfo($"关联表表头'{rtbName}'在不存在字段{rFields[0]},请检查");
+                            ExcelTools.Utils.LogInfo($"关联   表表头'{rtbName}'在不存在字段{rFields[0]},请检查");
                             return ret;
                         }
 
@@ -796,6 +796,12 @@ namespace Excel.OpenXml
                         else if (scanDescs[i].Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Encry.ToString()])) // 手机号加密
                         {
                             rowRetDic.Add(scanDescs[i].FieldName, convertValue.ToString().ToPhoneCardNoEncryption());
+                        }
+                        else if (scanDescs[i].Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Password.ToString()])) //密码加盐
+                        {
+                            var password = PwdHelper.ToPassWordGetSalt(convertValue.ToString(), out string salt);
+                            rowRetDic.Add(scanDescs[i].FieldName, password);
+                            rowRetDic.Add("PwdSalt", salt);
                         }
 
                         rowItemPassCount++;

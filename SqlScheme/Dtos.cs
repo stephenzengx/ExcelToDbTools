@@ -126,6 +126,7 @@ namespace ExcelTools
         PYWB, //拼音五笔
         Encry, //加密
         Range, //范围
-        Related //关联
+        Related, //关联
+        Password //密码
     }
 }
