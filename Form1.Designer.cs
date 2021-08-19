@@ -126,7 +126,7 @@ namespace ExcelTools
             this.DrpDwnOrgs.FormattingEnabled = true;
             this.DrpDwnOrgs.Location = new System.Drawing.Point(288, 110);
             this.DrpDwnOrgs.Name = "DrpDwnOrgs";
-            this.DrpDwnOrgs.Size = new System.Drawing.Size(162, 25);
+            this.DrpDwnOrgs.Size = new System.Drawing.Size(259, 25);
             this.DrpDwnOrgs.TabIndex = 19;
             this.DrpDwnOrgs.Text = "请选择机构";
             // 

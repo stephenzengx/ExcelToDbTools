@@ -165,7 +165,8 @@ namespace ExcelTools
 
             foreach (var tbName in tbNameList)
             {
-                dic.Add($"{dbname}.{tbName}", con.GetTbDesc(dbname, tbName));
+                if(!dic.TryGetValue($"{dbname}.{tbName}",out var _v2))
+                    dic.Add($"{dbname}.{tbName}", con.GetTbDesc(dbname, tbName));
             }
 
             return dic;
@@ -182,11 +183,6 @@ namespace ExcelTools
 
         public static Dictionary<string,string> GetDicValues(this IDbConnection con, string fullTbName, string keyFieldName, string valueFieldName, string JGIDFieldName, string JGID)
         {
-            if (fullTbName.Equals("ihdb_lgfy.t_base_presthreetype"))
-            {
-                Console.WriteLine();
-            }
-
             var dic = new Dictionary<string, string>();
             string tbsql = $"select {keyFieldName} as RKey, {valueFieldName} as RValue from {fullTbName} where {JGIDFieldName} = @JGID;";
 
@@ -199,7 +195,8 @@ namespace ExcelTools
 
             sqlRet.ForEach(p =>
             {
-                dic.Add(p.RKey, p.RValue);
+                if (!dic.TryGetValue(p.RKey, out var _v2))
+                    dic.Add(p.RKey, p.RValue);
             });
 
             return dic;
