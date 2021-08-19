@@ -727,6 +727,10 @@ namespace Excel.OpenXml
                 RowIndexs = new List<int>()
             };
 
+            var treeTbNames = ExcelTools.Utils.Config["treeTbNames"];
+            var isTreeTb = treeTbNames.Contains(tbName);
+            var treeTbFields = ExcelTools.Utils.Config["treeTbFields"];
+
             var queryRet = Query(true, sheetName, startCell, configuration);
             //遍历每行数据
             foreach (var row in queryRet)
@@ -744,7 +748,7 @@ namespace Excel.OpenXml
                         object convertValue = null;
                         object itemValue = rowItem.Value;
 
-                        if (!MyTypeMappingImpl(tbDescs.FirstOrDefault(m => m.FieldName == scanDescs[i].FieldName), scanDescs[i], ref convertValue, itemValue, rowIndex))
+                        if (!MyTypeMappingImpl(tbDescs.FirstOrDefault(m => m.FieldName == scanDescs[i].FieldName), scanDescs[i], ref convertValue, itemValue, rowIndex,isTreeTb,treeTbFields))
                             continue;
 
                         if (string.IsNullOrEmpty(scanDescs[i].Prefix))
@@ -829,28 +833,29 @@ namespace Excel.OpenXml
             ret.ExecSql = DbConnectionExtensions.JoinInsertHeadSql(tbName, scanDescs.Select(m => m.FieldName).ToList(), isExistPYWB, isExistJybs, JGIDFieldName, out var v1 );
             ret.FieldNameList = v1;
 
-            //验证（数据值，以及跟Excel的行对应关系是正确的）
-            //if (tbName == "t_base_empdept")
-            //{
-            //    for (var i=0; i< ret.ExecParams.Count;i++)
-            //    {
-            //        Console.WriteLine($"{ret.RowIndexs[i]} : ksuuid-{ret.ExecParams[i].Get<string>("ksuuid")}");
-            //    }
-            //}
-
             return ret;
         }
 
-        private static bool MyTypeMappingImpl(TbDesc tbdesc, ScanExcelHeadDesc scanDesc, ref object newValue, object itemValue,int rowIndex)
+        private static bool MyTypeMappingImpl(TbDesc tbdesc, ScanExcelHeadDesc scanDesc, ref object newValue, object itemValue,int rowIndex,bool isTreeTb, string treeTbFields)
         {
             if (itemValue == null && !tbdesc.IsNeeded)
             {
                 return true;
             }
 
+            //子关联表
+            if (itemValue == null && isTreeTb && treeTbFields.Contains(tbdesc.FieldName))
+            {
+                newValue = string.Empty;
+                return true;
+            }
+
+
             if ((itemValue == null || string.IsNullOrEmpty(itemValue.ToString())) && 
                 (tbdesc.IsNeeded && !scanDesc.Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Related.ToString()])))
             {
+
+
                 ExcelTools.Utils.LogInfo($"第{rowIndex}行，表头{scanDesc.HeaderName} 为必填项！");
                 return false;
             }

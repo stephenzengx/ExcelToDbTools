@@ -457,8 +457,6 @@ namespace ExcelTools
                     Utils.LogInfo($"Excel表: {file.Name} --------");
                     var sheetNames = MyMiniExcel.GetSheetNames(file.FullName);
 
-                    var isExistClearTbName = ClearTbDic.TryGetValue(dbStrArr[0], out var tbNameList);
-
                     using (FileStream stream = Helpers.OpenSharedRead(file.FullName))
                     {
                         var xmlSheetReader = new ExcelOpenXmlSheetReader(stream);
@@ -481,14 +479,19 @@ namespace ExcelTools
                 Utils.LogInfo(GetLineMsg("校验Excel行数据 通过！", false));
 
                 Utils.LogInfo(GetLineMsg("开始校验关联数据", true));
-                //校验Excel字段 关联数据   ExecSqlFinalDic
-                foreach (var dbDesc in ScanDescDic)
+                //校验Excel字段 关联数据   ExecSqlFinalDic 
+                foreach (var dbDesc in ScanDescDic) //dbname : [dbname.tbname : list]
                 {
                     foreach (var tbDesc in dbDesc.Value)//每个sheet表
                     {
                         var fullTbName = tbDesc.Key;
 
-                        var fieldDescs = tbDesc.Value.Where(m => m.Prefix.Contains(Config[EnumIdentifier.Related.ToString()]) && m.FieldName!= "ryuuid").ToList();//to do删除
+                        var treeTbNames = ExcelTools.Utils.Config["treeTbNames"];
+                        var singleTbName = fullTbName.Split(Config[EnumIdentifier.Dot.ToString()]).ToList()[1];
+                        var isTreeTb = treeTbNames.Contains(singleTbName);
+                        var treeTbFields = ExcelTools.Utils.Config["treeTbFields"];
+
+                        var fieldDescs = tbDesc.Value.Where(m => m.Prefix.Contains(Config[EnumIdentifier.Related.ToString()])).ToList();
                         if (fieldDescs.Count <= 0)
                             continue;
 
@@ -500,6 +503,7 @@ namespace ExcelTools
                         var rScanRetKeyPairs = ExecSqlFinalDic.Where(m => relatedTbNames.Contains(m.Key)).ToList();//关联表 (可能会存在没有的情况)
 
                         var noMatchInfos = new List<RltNoMatchInfo>(); 
+                        
                         /*
                          判断关联数据思路
                          1- 数据库未找到关联数据
@@ -518,8 +522,17 @@ namespace ExcelTools
                                 //关联值，
                                 var rValues = string.Empty;
                                 var KeyFieldValue = curParms[i].Get<string>(curFieldDesc.FieldName);
-  
-                                //数据库字典找
+
+
+                                //父级Pid 为空,直接跳过
+                                if (isTreeTb && string.IsNullOrEmpty(KeyFieldValue) &&
+                                    treeTbFields.Contains(curFieldDesc.FieldName))
+                                {
+                                    rowPassItems++;
+                                    continue;
+                                }
+
+                                //从数据库找关联数据
                                 if (RelatedDataDic.TryGetValue($"{curFieldDesc.RelatedTbName}.{curFieldDesc.KeyFieldName}.{curFieldDesc.ValueFieldName}", out var _v1))
                                 {
                                     if (_v1.TryGetValue(KeyFieldValue, out var _v2))
@@ -534,7 +547,7 @@ namespace ExcelTools
                                     }
                                 }
 
-                                //找Excel
+                                //从导入的Excel找关联数据
                                 if (string.IsNullOrEmpty(rValues))
                                 {
                                     //是否有相关表  
