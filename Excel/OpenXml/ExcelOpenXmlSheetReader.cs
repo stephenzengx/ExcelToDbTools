@@ -730,7 +730,7 @@ namespace Excel.OpenXml
             var treeTbNames = ExcelTools.Utils.Config["treeTbNames"];
             var isTreeTb = treeTbNames.Contains(tbName);
             var treeTbFields = ExcelTools.Utils.Config["treeTbFields"];
-
+            
             var queryRet = Query(true, sheetName, startCell, configuration);
             //遍历每行数据
             foreach (var row in queryRet)
@@ -801,7 +801,7 @@ namespace Excel.OpenXml
                         {
                             var password = PwdHelper.ToPassWordGetSalt(convertValue.ToString(), out string salt);
                             rowRetDic.Add(scanDescs[i].FieldName, password);
-                            rowRetDic.Add("PwdSalt", salt);
+                            rowRetDic.Add("mmy", salt);
                         }
 
                         rowItemPassCount++;
@@ -836,7 +836,13 @@ namespace Excel.OpenXml
 
             ret.DbName = dbName;
             ret.TbName = tbName;
-            ret.ExecSql = DbConnectionExtensions.JoinInsertHeadSql(tbName, scanDescs.Select(m => m.FieldName).ToList(), isExistPYWB, isExistJybs, JGIDFieldName, out var v1 );
+            //密码特殊处理
+            var fieldNameList = scanDescs.Select(m => m.FieldName).ToList();
+            if (tbName.ToLower() == "t_base_user")
+            {
+                fieldNameList.Add("mmy");
+            }
+            ret.ExecSql = DbConnectionExtensions.JoinInsertHeadSql(tbName, fieldNameList, isExistPYWB, isExistJybs, JGIDFieldName, out var v1 );
             ret.FieldNameList = v1;
 
             return ret;
