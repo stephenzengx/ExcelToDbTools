@@ -9,11 +9,13 @@ namespace ExcelTools
         public static string BasePath = AppDomain.CurrentDomain.BaseDirectory;
 
         public static IConfigurationRoot Config;
+        public static bool IsRecordLog;
 
         static Utils()
         {
             var configurationBuilder = new ConfigurationBuilder().SetBasePath(Directory.GetCurrentDirectory()).AddJsonFile("AppSettings.Json");
             Config = configurationBuilder.Build();
+            IsRecordLog = Config["IsRecordLog"] == "1";
         }
 
         public static void Reload()
@@ -29,7 +31,8 @@ namespace ExcelTools
         public static void LogInfo(string msg)
         {
             Console.WriteLine(msg);
-            //WriteLogLine(msg);    //to do
+            if(IsRecordLog)
+                WriteLogLine(msg);    
         }
 
         /// <summary>
@@ -48,7 +51,7 @@ namespace ExcelTools
                 }
             }
 
-            File.AppendAllText(logFilePath, DateTime.Now.ToString() + " " + msg + "\r\n");
+            File.AppendAllText(logFilePath, DateTime.Now + " " + msg + "\r\n");
         }
     }
 }

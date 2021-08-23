@@ -22,8 +22,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="AutoMapper" Version="8.1.0" />
     <PackageReference Include="Dapper" Version="2.0.90" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="3.1.18">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="3.1.17" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="3.1.18" />
     <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="3.2.6" />
   </ItemGroup>
 
@@ -35,9 +41,6 @@
 
   <ItemGroup>
     <None Update="AppSettings.Json">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Update="log\logTest.txt">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>

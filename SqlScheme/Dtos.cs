@@ -35,14 +35,19 @@ namespace ExcelTools
         public Tuple<int, int> RangeInt { get; set; } = new Tuple<int, int>(0, int.MaxValue);
 
         /// <summary>
-        /// 关联表名
+        /// 关联表名 全称
         /// </summary>
-        public string RelatedTbName { get; set; }
+        public string RelatedFullTbName { get; set; }
 
         /// <summary>
-        /// 所关联的字段
+        /// 所关联的字段值 拼接
         /// </summary>
-        public string KeyFieldName { get; set; }
+        public string KeyFieldNamesStr { get; set; }
+
+        /// <summary>
+        /// 所有关联字段
+        /// </summary>
+        public List<string> KeyFileldNameList { get; set; }
 
         //public object KeyFieldValue { get; set; }
 
@@ -72,7 +77,8 @@ namespace ExcelTools
 
         public int LegalRowCount { get; set; } //验证通过条数
 
-        public int IllegalRowCount { get; set; } //验证不通过条数
+        public HashSet<int> IllegalRowIndexSet { get; set; }=new HashSet<int>();//验证不通过 行数集合
+        //public int IllegalRowCount { get; set; } 
     }
 
     /// <summary>
@@ -126,7 +132,8 @@ namespace ExcelTools
         PYWB, //拼音五笔
         Encry, //加密
         Range, //范围
-        Related, //关联
-        Password //密码
+        Related, //关联, shhet导入前清空
+        Password, //密码
+        SkipScan //sheet跳过扫描
     }
 }

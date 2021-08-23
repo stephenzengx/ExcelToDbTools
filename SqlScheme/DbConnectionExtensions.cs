@@ -9,6 +9,24 @@ namespace ExcelTools
 {
     public static class DbConnectionExtensions
     {
+        public static void Change_SJHM_ZJHM(this IDbConnection con,List<tb_relative> list)
+        {
+            var i = 1;
+            foreach (var item in list)
+            {
+                DynamicParameters sParameters = new DynamicParameters();
+
+                sParameters.Add("xm", item.xm);
+                sParameters.Add("sjhm", item.sjhm.ToPhoneCardNoEncryption());
+                sParameters.Add("zjhm", item.zjhm.ToPhoneCardNoEncryption());
+
+                var count = con.Execute($"update t_base_user set sjhm = @sjhm, zjhm=@zjhm where xm=@xm", sParameters);
+                i++;
+                if(count>0)
+                    Console.WriteLine($"{i}-{item.xm} 修改成功");
+            }
+        }
+
         public static void TestBulkInsert(this IDbConnection con)
         {
             List<DynamicParameters> pParameters = new List<DynamicParameters>();
@@ -35,7 +53,7 @@ namespace ExcelTools
             con.Execute(execSql, pParameters); //直接传送list对象
         }
 
-        public static List<string> CommonFieldNames = new List<string> { "id", "isdeleted", "cjsj", "cjry","cjrymc"};
+        public static List<string> CommonFieldNames = new List<string> { "id", "isdeleted", "cjsj", "cjry","cjrymc","xgsj"};
 
         public static List<string> PYWBS = new List<string>{"pym","wbm"};
 
@@ -95,8 +113,10 @@ namespace ExcelTools
             parm.Add("cjrymc", "cjry-mc");
             parm.Add("cjry", "cjry-id");
             parm.Add("cjsj", DateTime.Now);
+            parm.Add("xgsj", DateTime.Now);
 
-            if(isExistJybs)
+
+            if (isExistJybs)
                 parm.Add("jybs", false);
 
             return parm;
@@ -181,10 +201,25 @@ namespace ExcelTools
             return con.Query<string>(tbsql, parameters).ToList();
         }
 
-        public static Dictionary<string,string> GetDicValues(this IDbConnection con, string fullTbName, string keyFieldName, string valueFieldName, string JGIDFieldName, string JGID)
+        /// <summary>
+        /// 获取 key-values 字典
+        /// </summary>
+        /// <param name="con"></param>
+        /// <param name="fullTbName"></param>
+        /// <param name="keyFieldName"></param>
+        /// <param name="valueFieldName"></param>
+        /// <param name="JGIDFieldName"></param>
+        /// <param name="JGID"></param>
+        /// <returns></returns>
+        public static Dictionary<string,string> GetDicValues(this IDbConnection con, string fullTbName, List<string> keyFieldNameList, string valueFieldName, string JGIDFieldName, string JGID)
         {
             var dic = new Dictionary<string, string>();
-            string tbsql = $"select {keyFieldName} as RKey, {valueFieldName} as RValue from {fullTbName} where {JGIDFieldName} = @JGID;";
+            if (keyFieldNameList.Count <= 0)
+            {
+                throw  new ArgumentException("keyFieldNameList error!");
+            }
+
+            string tbsql = $"select CONCAT({string.Join(",',',", keyFieldNameList)}) as RKey, {valueFieldName} as RValue from {fullTbName} where {JGIDFieldName} = @JGID;";
 
             DynamicParameters parameters = new DynamicParameters();
             parameters.Add("JGID", JGID);

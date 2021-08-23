@@ -37,6 +37,599 @@ namespace Excel.OpenXml
             _archive = new ExcelOpenXmlZip(stream);
         }
 
+        #region 结合 Dapper，扩展了一些方法
+        /// <summary>
+        /// 处理sheet表头
+        /// </summary>
+        /// <param name="sheetName"></param>
+        /// <param name="tbDbDescdic"></param>
+        /// <param name="tbName"></param>
+        /// <param name="curTbDesc"></param>
+        /// <param name="startCell"></param>
+        /// <param name="configuration"></param>
+        /// <returns></returns>
+        public Tuple<bool, List<ScanExcelHeadDesc>> ResolveSheetHeader(
+            string sheetName,
+            Dictionary<string, List<TbDesc>> tbDbDescdic,
+            string tbName, List<TbDesc> curTbDesc,
+            string startCell = "A1", IConfiguration configuration = null)
+        {
+            string PrefixAll = ExcelTools.Utils.Config["PrefixAll"];
+            var config = ExcelTools.Utils.Config;
+            List<ScanExcelHeadDesc> list = new List<ScanExcelHeadDesc>();
+            var ret = new Tuple<bool, List<ScanExcelHeadDesc>>(false, list);
+
+            //获取表头
+            var headers = Query(false, sheetName, startCell, configuration).FirstOrDefault()?.Values
+                                    ?.Select(s => s?.ToString())?.ToArray();
+            if (headers == null || headers.Length <= 0)
+            {
+                ExcelTools.Utils.LogInfo("表头为空，请检查");
+                return ret;
+            }
+
+            if (headers.Any(m => string.IsNullOrEmpty(m)))
+            {
+                ExcelTools.Utils.LogInfo("空缺某些表头栏位，请检查！");
+                return ret;
+            }
+
+            //全部转成小写
+            for (var i = 0; i < headers.Length; i++)
+                headers[i] = headers[i]?.ToLower();
+
+            foreach (var head in headers)
+            {
+                //无特殊含义字段
+                if (!head.Contains(config[EnumIdentifier.SpitChar.ToString()]))
+                {
+                    if (curTbDesc.FirstOrDefault(m => m.FieldName == head) == null)
+                    {
+                        ExcelTools.Utils.LogInfo($"数据库表'{tbName}'不存在表字段：{head}");
+                        return ret;
+                    }
+
+                    if (list.Any(m => m.FieldName == head))
+                    {
+                        ExcelTools.Utils.LogInfo($"表头关联字段'{head}'重复，请检查");
+                        return ret;
+                    }
+
+                    list.Add(new ScanExcelHeadDesc
+                    {
+                        HeaderName = head.ToLower(),
+                        FieldName = head.ToLower()
+                    });
+
+                    continue;
+                }
+                //拆分表头
+                List<string> spitItems = head.Split(config[EnumIdentifier.SpitChar.ToString()]).ToList();
+                if (spitItems.Count <= 1)
+                {
+                    ExcelTools.Utils.LogInfo($"表头{head}格式有误,请检查");
+                    return ret;
+                }
+                if (!PrefixAll.Contains(spitItems[0])) //检查前缀格式
+                {
+                    ExcelTools.Utils.LogInfo($"表头{head} 前缀格式有误,请检查");
+                    return ret;
+                }
+
+                /*                               
+                BM：无前缀为基础字段，无处理
+                !-BM: 代表该字段在本表唯一:           
+                $-MC: (PYM-WBM 这两个字段是不是在每个表都名字一样) 拼音码/五笔码表头格式, !$唯一，然后拼音码，五笔码             
+                *-Phone 手机号加密
+                ^-KC-[0,100] 代表数据范围，除非非常严格，一般来说判断非负数，否则可以不加
+                #-tb_relative.MC-RID*RID-RBM*RBM: 关联字段，通过tb_relative的MC，获取RID字段对应本表RID字段,获取RBM字段对应本表RBM字段               
+                */
+
+                //唯一，拼音/五笔, 加密
+                var Prefix = spitItems[0];
+                if (Prefix.Contains(config[EnumIdentifier.Unique.ToString()])
+                    || Prefix.Contains(config[EnumIdentifier.PYWB.ToString()])
+                    || Prefix.StartsWith(config[EnumIdentifier.Encry.ToString()]))
+                {
+                    if (spitItems.Count != 2)
+                    {
+                        ExcelTools.Utils.LogInfo($"表头{head}格式有误,请检查");
+                        return ret;
+                    }
+
+                    if (curTbDesc.FirstOrDefault(m => m.FieldName == spitItems[1]) == null)
+                    {
+                        ExcelTools.Utils.LogInfo($"数据库表'{tbName}'不存在表字段：{spitItems[1]}");
+                        return ret;
+                    }
+                    if (list.Any(m => m.FieldName == spitItems[1]))
+                    {
+                        ExcelTools.Utils.LogInfo($"表头关联字段'{head}'重复，请检查");
+                        return ret;
+                    }
+
+                    list.Add(new ScanExcelHeadDesc
+                    {
+                        Prefix = Prefix,
+                        FieldName = spitItems[1].ToLower(),
+                        HeaderName = head.ToLower(),
+                    });
+
+                }
+                //范围 ^-KC-[0,100]
+                else if (Prefix.StartsWith(config[EnumIdentifier.Range.ToString()]))
+                {
+                    if (spitItems.Count != 3)
+                    {
+                        ExcelTools.Utils.LogInfo($"表头{head}格式有误,请检查");
+                        return ret;
+                    }
+
+                    var tbDesc = curTbDesc.FirstOrDefault(m => m.FieldName == spitItems[1]);
+                    if (tbDesc == null)
+                    {
+                        ExcelTools.Utils.LogInfo($"数据库表'{tbName}'不存在表字段：{spitItems[1]}");
+                        return ret;
+                    }
+                    if (list.Any(m => m.FieldName == spitItems[1]))
+                    {
+                        ExcelTools.Utils.LogInfo($"表头关联字段'{head}'重复，请检查");
+                        return ret;
+                    }
+
+                    var scanDesc = new ScanExcelHeadDesc
+                    {
+                        Prefix = Prefix,
+                        HeaderName = head.ToLower(),
+                        FieldName = spitItems[1].ToLower()
+                    };
+
+                    list.Add(scanDesc);
+                    var rangItems = spitItems[2].Split(config[EnumIdentifier.Comma.ToString()]).ToList();
+                    if (rangItems.Count != 2)
+                    {
+                        ExcelTools.Utils.LogInfo($"表头{head}范围格式有误,请检查");
+                        return ret;
+                    }
+                    if (!rangItems[0].Contains(config[EnumIdentifier.LeftZkh.ToString()])
+                        || !rangItems[1].Contains(config[EnumIdentifier.RightZkh.ToString()]))
+                    {
+                        ExcelTools.Utils.LogInfo($"表头'{head}'范围格式有误,请检查");
+                        return ret;
+                    }
+                    //[0,]  | [0,22]
+                    if (tbDesc.type == typeof(int))
+                    {
+                        var leftValue = 0;
+                        var rightValue = 0;
+                        if (!Int32.TryParse(rangItems[0].Substring(1), out leftValue))
+                        {
+                            ExcelTools.Utils.LogInfo($"表头'{head}'范围格式有误/范围左值有误,请检查");
+                            return ret;
+                        }
+
+                        if (rangItems[1].Equals(config[EnumIdentifier.RightZkh.ToString()]))
+                        {
+                            rightValue = int.MaxValue;
+                        }
+                        else
+                        {
+                            if (!Int32.TryParse(rangItems[1].Substring(0, rangItems[1].Length - 1), out rightValue))
+                            {
+                                ExcelTools.Utils.LogInfo($"'表头{head}'范围格式有误/范围右值有误,请检查");
+                                return ret;
+                            }
+                        }
+                        scanDesc.RangeInt = new Tuple<int, int>(leftValue, rightValue);
+                    }
+                    else if (tbDesc.type == typeof(decimal))
+                    {
+                        var leftValue = new decimal(0);
+                        var rightValue = new decimal(0);
+                        if (!decimal.TryParse(rangItems[0].Substring(1), out leftValue))
+                        {
+                            ExcelTools.Utils.LogInfo($"表头'{head}'范围格式有误/范围左值有误,请检查");
+                            return ret;
+                        }
+
+                        if (rangItems[1].Equals(config[EnumIdentifier.RightZkh.ToString()]))
+                        {
+                            rightValue = decimal.MaxValue;
+                        }
+                        else
+                        {
+                            if (!decimal.TryParse(rangItems[1].Substring(0, rangItems[1].Length - 1), out rightValue))
+                            {
+                                ExcelTools.Utils.LogInfo($"表头'{head}'范围格式有误/右值有误,请检查");
+                                return ret;
+                            }
+                        }
+                        scanDesc.RangeDecimal = new Tuple<decimal, decimal>(leftValue, rightValue);
+                    }
+                }
+                //关联字符 #-DbName.relatedTbName-MC,MC1-RID*RID-RBM*RBM
+                else if (Prefix.StartsWith(config[EnumIdentifier.Related.ToString()]))
+                {
+                    if (spitItems.Count <= 2)
+                    {
+                        ExcelTools.Utils.LogInfo($"表头'{head}'范围有误,请检查");
+                        return ret;
+                    }
+
+                    var rtbFullName = spitItems[1].ToLower()
+                        .Replace("ihdb_lgfy", config["ihdb_lgfy_replacedb"])
+                        .Replace("ihbase_lgfy", config["ihbase_lgfy_replacedb"]); //替换表中库名占位符;
+                    if (!tbDbDescdic.TryGetValue(rtbFullName, out var rTbDesc))
+                    {
+                        ExcelTools.Utils.LogInfo($"表头 '{head}' 关联数据库表 '{rtbFullName}' 在数据库不存在,请检查");
+                        return ret;
+                    }
+
+                    var keyFieldNames = spitItems[2].ToLower().Split(config[EnumIdentifier.Comma.ToString()]).ToList();
+                    //拆分关联字段
+                    foreach (var keyFieldName in keyFieldNames)
+                    {
+                        if (!rTbDesc.Any(m => m.FieldName.Equals(keyFieldName)))
+                        {
+                            ExcelTools.Utils.LogInfo($"表头关联表'{rtbFullName}'在不存在字段{keyFieldName},请检查");
+                            return ret;
+                        }
+                    }
+
+                    var rSpitItems = spitItems.GetRange(3, spitItems.Count - 3);
+                    foreach (var item in rSpitItems)
+                    {
+                        var rFields = item.Split(config[EnumIdentifier.Encry.ToString()]).ToList();
+                        if (rFields.Count != 2)
+                        {
+                            ExcelTools.Utils.LogInfo($"关联表表头'{rtbFullName}'关联字段内容'{item}'格式有误,请检查");
+                            return ret;
+                        }
+
+                        if (!rTbDesc.Any(m => m.FieldName.Equals(rFields[0])))
+                        {
+                            ExcelTools.Utils.LogInfo($"关联表 表头'{rtbFullName}'在不存在字段{rFields[0]},请检查");
+                            return ret;
+                        }
+
+                        if (!curTbDesc.Any(m => m.FieldName.Equals(rFields[1])))
+                        {
+                            ExcelTools.Utils.LogInfo($"主表'{tbName}'在不存在字段{rFields[1]},请检查");
+                            return ret;
+                        }
+
+                        list.Add(new ScanExcelHeadDesc
+                        {
+                            HeaderName = head.ToLower(),
+                            Prefix = Prefix,
+                            FieldName = rFields[1].ToLower(),
+                            RelatedFullTbName = rtbFullName,
+                            KeyFileldNameList = keyFieldNames,
+                            KeyFieldNamesStr = spitItems[2].ToLower(),
+                            ValueFieldName = rFields[0] //这个不能转小写，是值
+                        });
+                    }
+                }
+                else
+                {
+                    ExcelTools.Utils.LogInfo($"表头'{head}'前缀格式有误,请检查");
+                    return ret;
+                }
+            }
+
+            //遍历数据库中的必填字段，再Excel表头是否都出现过 <id,isdelete,cjsj,pym,wbm,,jgid,jguuid 代码生成，跳过验证>
+            var strIgnores = ExcelTools.Utils.Config["IgnoreNeedValidFields"];
+            foreach (var desc in curTbDesc.Where(m => m.IsNeeded && !strIgnores.Contains(m.FieldName)))
+            {
+                //这已经验证过，表头一定在数据库存在,所以不用判空.
+                var entity = list.FirstOrDefault(m => m.FieldName == desc.FieldName);//<通过其他表取的字段 跳过验证>
+                if (entity == null)
+                {
+                    continue;
+                }
+
+                if (entity.Prefix.StartsWith(config[EnumIdentifier.Related.ToString()]))
+                    continue;
+
+                if (list.FirstOrDefault(m => m.FieldName == desc.FieldName) == null)
+                {
+                    ExcelTools.Utils.LogInfo($"表'{tbName}'字段 '{desc.FieldName}' 在数据库为必填字段，在Excel未填！");
+                    return ret;
+                }
+                //其他待补充... to do
+            }
+
+            var retFinal = new Tuple<bool, List<ScanExcelHeadDesc>>(true, ret.Item2);
+            return retFinal;
+        }
+
+        /// <summary>
+        /// 读取表格数据拼接 Sql
+        /// </summary>
+        /// <param name="sheetName"></param>
+        /// <param name="dbName"></param>
+        /// <param name="tbName"></param>
+        /// <param name="tbDescs"></param>
+        /// <param name="scanDescs"></param>
+        /// <param name="JGID"></param>
+        /// <param name="remainErrorCount"></param>
+        /// <param name="uniqDataDic">唯一数据 key:db.tbname.uniqFieldName</param>
+        /// <param name="relatedDataDic">key:dbname.tbname-keyFieldname-valueFieldname</param>
+        /// <param name="startCell"></param>
+        /// <param name="configuration"></param>
+        /// <returns></returns>
+        public ReadExcelDataRet GetSheetExecSql(string sheetName, string dbName, string tbName,
+            List<TbDesc> tbDescs, List<ScanExcelHeadDesc> scanDescs, string JGIDFieldName,
+            string JGID, ref int remainErrorCount,
+            ref Dictionary<string, List<string>> uniqDataDic,
+            string startCell = "A1", IConfiguration configuration = null)
+        {
+            ExcelTools.Utils.LogInfo($"开始校验sheet表-行数据: {sheetName} --------");
+
+            //思路：获取每行数据，将Excel每个字段(验证格式是否正确) 转成指定类型的值，然后拼接sql
+            //拼接公共表字段
+
+
+            bool isExistPYWB = scanDescs.Exists(m => m.Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.PYWB.ToString()]));
+            bool isExistJybs = tbDescs.Exists(m => m.FieldName.Equals("jybs"));
+
+            int? pymLength = tbDescs.Exists(m => m.FieldName.Equals("pym"))? tbDescs.FirstOrDefault(m=>m.FieldName=="pym")?.MaxLength:0;
+            int? wbmLength = tbDescs.Exists(m => m.FieldName.Equals("wbm")) ? tbDescs.FirstOrDefault(m => m.FieldName == "wbm")?.MaxLength : 0;
+
+            ReadExcelDataRet ret = new ReadExcelDataRet
+            {
+                ExecParams = new List<DynamicParameters>(),
+                RowIndexs = new List<int>()
+            };
+
+            var treeTbNames = ExcelTools.Utils.Config["treeTbNames"];
+            var isTreeTb = treeTbNames.Contains(tbName);
+            var treeTbFields = ExcelTools.Utils.Config["treeTbFields"];
+
+            var queryRet = Query(true, sheetName, startCell, configuration);
+
+            var isstart = true;
+            var rowIndex = 3;//从第3行开始读 第一行是字段名表头，第二行是字段注释表头
+            //遍历每行数据
+            foreach (var row in queryRet)
+            {
+                if (isstart)
+                {
+                    isstart = false;
+                    continue;
+                }
+
+                var rowItemPassCount = 0;
+                Dictionary<string, object> rowRetDic = new Dictionary<string, object>();
+                //遍历每个字段
+                foreach (var rowItem in row)
+                {
+                    for (var i = 0; i < scanDescs.Count; i++)
+                    {
+                        if (!scanDescs[i].HeaderName.Equals(rowItem.Key.ToLower()))
+                            continue;
+
+                        object convertValue = null;
+                        object itemValue = rowItem.Value;
+
+                        if (!MyTypeMappingImpl(tbDescs.FirstOrDefault(m => m.FieldName == scanDescs[i].FieldName), scanDescs[i], ref convertValue, itemValue, rowIndex, isTreeTb, treeTbFields))
+                            continue;
+
+                        if (string.IsNullOrEmpty(scanDescs[i].Prefix))
+                        {
+                            rowRetDic.Add(scanDescs[i].FieldName, convertValue);
+                        }
+                        else if (scanDescs[i].Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Related.ToString()])) //关联字段
+                        {
+                            //scanDescs[i].KeyFieldValue = convertValue?.ToString(); //关于找关联字段值
+                            rowRetDic.Add(scanDescs[i].FieldName, convertValue); //用于定位 paramlist 哪一行然后更新值为关联的值
+                        }
+                        else if (scanDescs[i].Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.PYWB.ToString()])) //拼音,五笔
+                        {
+                            rowRetDic.Add(scanDescs[i].FieldName, convertValue);
+                            var pym = convertValue?.ToString().GetFirstPY();
+                            var wbm = convertValue?.ToString().GetFirstWB();
+                            if (pym.Length > pymLength || wbm.Length>wbmLength)
+                            {
+                                if (pym.Length>pymLength)
+                                    ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDescs[i].HeaderName}' 拼音码值: {pym}长度为{pym.Length}, 超过数据库定义最大长度{pymLength}!");
+                                if (wbm.Length > wbmLength)
+                                    ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDescs[i].HeaderName}' 五笔码值: {wbm}长度为{wbm.Length}, 超过数据库定义最大长度{wbmLength}!");
+                                continue;
+                            }
+
+                            rowRetDic.Add("pym", pym);
+                            rowRetDic.Add("wbm", wbm);
+                        }
+                        else if (scanDescs[i].Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Unique.ToString()])) //唯一
+                        {
+                            var existFlag = false;
+                            //uniqDataDic key:db.tbname.uniqFieldName
+                            if (uniqDataDic.TryGetValue($"{dbName}.{tbName}.{scanDescs[i].FieldName}", out var list))
+                            {
+                                existFlag = true;
+                                if (convertValue != null && list.Contains(convertValue.ToString()))
+                                {
+                                    ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDescs[i].HeaderName}' 列值: ’{convertValue}‘ 在数据库已存在/在Excel重复出现!");
+                                    continue;
+                                }
+                            }
+
+                            if (!existFlag)
+                            {
+                                list = new List<string>();
+                                uniqDataDic.Add($"{dbName}.{tbName}.{scanDescs[i].FieldName}", list);
+                            }
+
+                            //scanDescs[i].KeyFieldValue = convertValue;
+                            list.Add(convertValue?.ToString());
+                            //重置字典
+                            uniqDataDic[$"{dbName}.{tbName}.{scanDescs[i].FieldName}"] = list;
+
+                            rowRetDic.Add(scanDescs[i].FieldName, convertValue);
+                        }
+                        else if (scanDescs[i].Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Encry.ToString()])) // 手机号加密
+                        {
+                            rowRetDic.Add(scanDescs[i].FieldName, convertValue.ToString().ToPhoneCardNoEncryption());
+                        }
+                        else if (scanDescs[i].Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Password.ToString()])) //密码加盐
+                        {
+                            //密码 和 盐 增加长度判断 to do...
+                            var password = PwdHelper.ToPassWordGetSalt(convertValue.ToString(), out string salt);
+                            rowRetDic.Add(scanDescs[i].FieldName, password);
+                            rowRetDic.Add("mmy", salt);
+                        }
+
+                        rowItemPassCount++;
+                    }
+                }
+
+                ret.AllRowCount++;
+                if (rowItemPassCount == scanDescs.Count)
+                {
+                    ret.RowIndexs.Add(rowIndex++);
+                    DynamicParameters parm = DbConnectionExtensions.GetBaseDynamicParameters(JGIDFieldName, JGID, isExistJybs);
+                    foreach (var rowDic in rowRetDic)
+                    {
+                        parm.Add(rowDic.Key, rowDic.Value);
+                    }
+                    ret.ExecParams.Add(parm);
+                    ret.LegalRowCount++;
+                }
+                else
+                {
+                    ret.RowIndexs.Add(rowIndex++);
+                    ret.IllegalRowIndexSet.Add(rowIndex);
+                    remainErrorCount--;
+                }
+
+                if (remainErrorCount <= 0)
+                {
+                    ExcelTools.Utils.LogInfo($"已达到最大错误记录数阈值，程序结束！");
+                    return null;
+                }
+            }
+
+            ret.DbName = dbName;
+            ret.TbName = tbName;
+            //密码特殊处理
+            var fieldNameList = scanDescs.Select(m => m.FieldName).ToList();
+            if (tbName.ToLower() == "t_base_user")
+            {
+                fieldNameList.Add("mmy");
+            }
+            ret.ExecSql = DbConnectionExtensions.JoinInsertHeadSql(tbName, fieldNameList, isExistPYWB, isExistJybs, JGIDFieldName, out var v1);
+            ret.FieldNameList = v1;
+
+            return ret;
+        }
+
+        private static bool MyTypeMappingImpl(TbDesc tbdesc, ScanExcelHeadDesc scanDesc, ref object newValue, object itemValue, int rowIndex, bool isTreeTb, string treeTbFields)
+        {
+            //为空非必填
+            if (itemValue == null && !tbdesc.IsNeeded)
+            {
+                return true;
+            }
+
+            //自关联表
+            if (itemValue == null && isTreeTb && treeTbFields.Contains(tbdesc.FieldName))
+            {
+                newValue = string.Empty;
+                return true;
+            }
+
+
+            if ((itemValue == null || string.IsNullOrEmpty(itemValue.ToString())) &&
+                (tbdesc.IsNeeded && !scanDesc.Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Related.ToString()])))
+            {
+                ExcelTools.Utils.LogInfo($"第{rowIndex}行，表头{scanDesc.HeaderName} 为必填项！");
+                return false;
+            }
+
+            var type = tbdesc.type;
+            // longtext, varchar(n), decimal,int,bit,datetime,
+            if (type == typeof(string))
+            {
+                if (tbdesc.MaxLength > 0 && itemValue.ToString().Length > tbdesc.MaxLength)
+                {
+                    ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDesc.HeaderName}' 列值: {itemValue}长度为{itemValue.ToString().Length}, 超过数据库定义最大长度{tbdesc.MaxLength}!");
+                    return false;
+                }
+                newValue = XmlEncoder.DecodeString(itemValue.ToString());
+            }
+            else if (type == typeof(DateTime))
+            {
+                if (itemValue is DateTime || itemValue is DateTime?)
+                    newValue = itemValue;
+                else if (DateTime.TryParse(itemValue.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var _v))
+                    newValue = _v;
+                else if (DateTime.TryParseExact(itemValue.ToString(), "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var _v2))
+                    newValue = _v2;
+                else if (double.TryParse(itemValue.ToString(), NumberStyles.None, CultureInfo.InvariantCulture, out var _d))
+                    newValue = DateTimeHelper.FromOADate(_d);
+                else
+                {
+                    ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDesc.HeaderName}'列 转<datetime>有误！");
+                    return false;
+                }
+            }
+            else if (type == typeof(bool))
+            {
+                var vs = itemValue.ToString();
+                if (vs != "0" || vs != "1")
+                {
+                    ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDesc.HeaderName}'列  转<bool>值出错！");
+
+                    return false;
+                }
+
+                newValue = (vs == "0" ? false : true);
+            }
+            else if (type == typeof(decimal))
+            {
+                if (!decimal.TryParse(itemValue.ToString(), out var _v2))
+                {
+                    ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDesc.HeaderName}'列 转<decimal>出错！");
+                    return false;
+                }
+
+                if (scanDesc.RangeDecimal != null && scanDesc.Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Range.ToString()])
+                    && _v2 < scanDesc.RangeDecimal.Item1
+                    && _v2 > scanDesc.RangeDecimal.Item2)  //范围
+                {
+                    ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDesc.HeaderName}'列 值超出范围！");
+                    return false;
+                }
+                newValue = _v2;
+            }
+            else if (type == typeof(int))
+            {
+                if (!int.TryParse(itemValue.ToString(), out var _v2))
+                {
+                    ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDesc.HeaderName}'列 转int值出错！");
+                    return false;
+                }
+                if (scanDesc.RangeInt != null && scanDesc.Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Range.ToString()])
+                                                  && _v2 < scanDesc.RangeInt.Item1
+                                                  && _v2 > scanDesc.RangeInt.Item2)  //范围
+                {
+                    ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDesc.HeaderName}'列 值超出范围！");
+                    return false;
+                }
+
+                newValue = _v2;
+            }
+            else
+            {
+                return false;
+                //newValue = Convert.ChangeType(itemValue, type);
+            }
+
+            return true;
+        }
+        #endregion
+
         public IEnumerable<IDictionary<string, object>> Query(bool useHeaderRow, string sheetName, string startCell, IConfiguration configuration)
         {
             var config = (OpenXmlConfiguration)configuration ?? OpenXmlConfiguration.DefaultConfig; //TODO:
@@ -395,566 +988,6 @@ namespace Excel.OpenXml
             }
         }
 
-        #region 结合 Dapper，扩展了一些方法 by -zx
-        /// <summary>
-        /// 处理sheet表头
-        /// </summary>
-        /// <param name="sheetName"></param>
-        /// <param name="tbDbDescdic"></param>
-        /// <param name="tbName"></param>
-        /// <param name="curTbDesc"></param>
-        /// <param name="startCell"></param>
-        /// <param name="configuration"></param>
-        /// <returns></returns>
-        public Tuple<bool, List<ScanExcelHeadDesc>> ResolveSheetHeader(
-            string sheetName, 
-            Dictionary<string, List<TbDesc>> tbDbDescdic,
-            string tbName, List<TbDesc> curTbDesc,
-            string startCell = "A1", IConfiguration configuration=null)
-        {
-            string PrefixAll = ExcelTools.Utils.Config["PrefixAll"];
-            var config = ExcelTools.Utils.Config;
-            List<ScanExcelHeadDesc> list = new List<ScanExcelHeadDesc>();
-            var ret = new Tuple<bool, List<ScanExcelHeadDesc>>(false,list);
-
-            //获取表头
-            var headers = Query(false, sheetName, startCell, configuration).FirstOrDefault()?.Values
-                                    ?.Select(s => s?.ToString())?.ToArray();
-            if (headers == null || headers.Length <= 0)
-            {
-                ExcelTools.Utils.LogInfo("表头为空，请检查");
-                return ret;
-            }
-
-            if (headers.Any(m => string.IsNullOrEmpty(m)))
-            {
-                ExcelTools.Utils.LogInfo("空缺某些表头栏位，请检查！");
-                return ret;
-            }
-
-            //全部转成小写
-            for (var i = 0; i < headers.Length; i++)
-                headers[i] = headers[i]?.ToLower();
-
-            foreach (var head in headers)
-            {
-                //无特殊含义字段
-                if (!head.Contains(config[EnumIdentifier.SpitChar.ToString()]))
-                {
-                    if (curTbDesc.FirstOrDefault(m => m.FieldName == head) == null)
-                    {
-                        ExcelTools.Utils.LogInfo($"数据库表'{tbName}'不存在表字段：{head}");
-                        return ret;
-                    }
-
-                    if (list.Any(m => m.FieldName == head))
-                    {
-                        ExcelTools.Utils.LogInfo($"表头关联字段'{head}'重复，请检查");
-                        return ret;
-                    }
-
-                    list.Add(new ScanExcelHeadDesc
-                    {
-                        HeaderName = head.ToLower(),
-                        FieldName = head.ToLower()
-                    });
-
-                    continue;
-                }
-                //拆分表头
-                List<string> spitItems = head.Split(config[EnumIdentifier.SpitChar.ToString()]).ToList();
-                if (spitItems.Count<=1)
-                {
-                    ExcelTools.Utils.LogInfo($"表头{head}格式有误,请检查");
-                    return ret;
-                }
-                if (!PrefixAll.Contains(spitItems[0])) //检查前缀格式
-                {
-                    ExcelTools.Utils.LogInfo($"表头{head} 前缀格式有误,请检查");
-                    return ret;
-                }
-
-                /*                               
-                BM：无前缀为基础字段，无处理
-                !-BM: 代表该字段在本表唯一:           
-                $-MC: (PYM-WBM 这两个字段是不是在每个表都名字一样) 拼音码/五笔码表头格式, !$唯一，然后拼音码，五笔码             
-                *-Phone 手机号加密
-                ^-KC-[0,100] 代表数据范围，除非非常严格，一般来说判断非负数，否则可以不加
-                #-tb_relative.MC-RID*RID-RBM*RBM: 关联字段，通过tb_relative的MC，获取RID字段对应本表RID字段,获取RBM字段对应本表RBM字段               
-                */
-
-                //唯一，拼音/五笔, 加密
-                var Prefix = spitItems[0];
-                if (Prefix.Contains(config[EnumIdentifier.Unique.ToString()])
-                    || Prefix.Contains(config[EnumIdentifier.PYWB.ToString()])
-                    || Prefix.StartsWith(config[EnumIdentifier.Encry.ToString()]))
-                {
-                    if (spitItems.Count != 2)
-                    {
-                        ExcelTools.Utils.LogInfo($"表头{head}格式有误,请检查");
-                        return ret;
-                    }
-
-                    if (curTbDesc.FirstOrDefault(m => m.FieldName == spitItems[1]) == null)
-                    {
-                        ExcelTools.Utils.LogInfo($"数据库表'{tbName}'不存在表字段：{spitItems[1]}");
-                        return ret;
-                    }
-                    if (list.Any(m => m.FieldName == spitItems[1]))
-                    {
-                        ExcelTools.Utils.LogInfo($"表头关联字段'{head}'重复，请检查");
-                        return ret;
-                    }
-
-                    list.Add(new ScanExcelHeadDesc
-                    {
-                        Prefix = Prefix,
-                        FieldName = spitItems[1].ToLower(),
-                        HeaderName = head.ToLower(),
-                    });
-
-                }
-                //范围 ^-KC-[0,100]
-                else if (Prefix.StartsWith(config[EnumIdentifier.Range.ToString()]))
-                {
-                    if (spitItems.Count != 3)
-                    {
-                        ExcelTools.Utils.LogInfo($"表头{head}格式有误,请检查");
-                        return ret;
-                    }
-
-                    var tbDesc = curTbDesc.FirstOrDefault(m => m.FieldName == spitItems[1]);
-                    if (tbDesc == null)
-                    {
-                        ExcelTools.Utils.LogInfo($"数据库表'{tbName}'不存在表字段：{spitItems[1]}");
-                        return ret;
-                    }
-                    if (list.Any(m => m.FieldName == spitItems[1]))
-                    {
-                        ExcelTools.Utils.LogInfo($"表头关联字段'{head}'重复，请检查");
-                        return ret;
-                    }
-
-                    var scanDesc = new ScanExcelHeadDesc
-                    {
-                        Prefix=Prefix, HeaderName = head.ToLower(), FieldName = spitItems[1].ToLower()
-                    };
-
-                    list.Add(scanDesc);
-                    var rangItems = spitItems[2].Split(config[EnumIdentifier.Comma.ToString()]).ToList();
-                    if (rangItems.Count != 2)
-                    {
-                        ExcelTools.Utils.LogInfo($"表头{head}范围格式有误,请检查");
-                        return ret;
-                    }
-                    if (!rangItems[0].Contains(config[EnumIdentifier.LeftZkh.ToString()])
-                        || !rangItems[1].Contains(config[EnumIdentifier.RightZkh.ToString()]))
-                    {
-                        ExcelTools.Utils.LogInfo($"表头'{head}'范围格式有误,请检查");
-                        return ret;
-                    }
-                    //[0,]  | [0,22]
-                    if (tbDesc.type == typeof(int))
-                    {
-                        var leftValue = 0;
-                        var rightValue = 0;
-                        if (!Int32.TryParse(rangItems[0].Substring(1), out leftValue))
-                        {
-                            ExcelTools.Utils.LogInfo($"表头'{head}'范围格式有误/范围左值有误,请检查");
-                            return ret;
-                        }
-
-                        if (rangItems[1].Equals(config[EnumIdentifier.RightZkh.ToString()]))
-                        {
-                            rightValue = int.MaxValue; 
-                        }
-                        else
-                        {
-                            if (!Int32.TryParse(rangItems[1].Substring(0, rangItems[1].Length - 1), out rightValue))
-                            {
-                                ExcelTools.Utils.LogInfo($"'表头{head}'范围格式有误/范围右值有误,请检查");
-                                return ret;
-                            }
-                        }
-                        scanDesc.RangeInt = new Tuple<int, int>(leftValue, rightValue);
-                    }
-                    else if (tbDesc.type == typeof(decimal))
-                    {
-                        var leftValue = new decimal(0);
-                        var rightValue = new decimal(0);
-                        if (!decimal.TryParse(rangItems[0].Substring(1), out leftValue))
-                        {
-                            ExcelTools.Utils.LogInfo($"表头'{head}'范围格式有误/范围左值有误,请检查");
-                            return ret;
-                        }
-
-                        if (rangItems[1].Equals(config[EnumIdentifier.RightZkh.ToString()]))
-                        {
-                            rightValue = decimal.MaxValue; 
-                        }
-                        else
-                        {
-                            if (!decimal.TryParse(rangItems[1].Substring(0, rangItems[1].Length - 1), out rightValue))
-                            {
-                                ExcelTools.Utils.LogInfo($"表头'{head}'范围格式有误/右值有误,请检查");
-                                return ret;
-                            }
-                        }
-                        scanDesc.RangeDecimal = new Tuple<decimal, decimal>(leftValue, rightValue);
-                    }
-                }
-                //关联字符 #-db.tb_relative-MC-RID*RID-RBM*RBM
-                else if (Prefix.StartsWith(config[EnumIdentifier.Related.ToString()]))
-                {
-                    if (spitItems.Count<=2)
-                    {
-                        ExcelTools.Utils.LogInfo($"表头'{head}'范围有误,请检查");
-                        return ret;
-                    }
-
-                    var rtbName = spitItems[1];
-                    if (!tbDbDescdic.TryGetValue(spitItems[1], out var rTbDesc))
-                    {
-                        ExcelTools.Utils.LogInfo($"表头 '{head}' 关联数据库表 '{rtbName}' 在数据库不存在,请检查");
-                        return ret;
-                    }
-
-                    var keyFieldName = spitItems[2];
-                    if (!rTbDesc.Any(m => m.FieldName.Equals(keyFieldName)))
-                    {
-                        ExcelTools.Utils.LogInfo($"表头关联表'{rtbName}'在不存在字段{keyFieldName},请检查");
-                        return ret;
-                    }
-
-                    var rSpitItems = spitItems.GetRange(3,spitItems.Count-3);
-                    foreach (var item in rSpitItems)
-                    {
-                        var rFields = item.Split(config[EnumIdentifier.Encry.ToString()]).ToList();
-                        if(rFields.Count!=2)
-                        {
-                            ExcelTools.Utils.LogInfo($"关联表表头'{rtbName}'关联字段内容'{item}'格式有误,请检查");
-                            return ret;
-                        }
-
-                        if (!rTbDesc.Any(m => m.FieldName.Equals(rFields[0])))
-                        {
-                            ExcelTools.Utils.LogInfo($"关联   表表头'{rtbName}'在不存在字段{rFields[0]},请检查");
-                            return ret;
-                        }
-
-                        if (!curTbDesc.Any(m => m.FieldName.Equals(rFields[1])))
-                        {
-                            ExcelTools.Utils.LogInfo($"主表'{tbName}'在不存在字段{rFields[1]},请检查");
-                            return ret;
-                        }
-
-                        list.Add(new ScanExcelHeadDesc
-                        {
-                            HeaderName = head.ToLower(),
-                            Prefix = Prefix,
-                            FieldName = rFields[1].ToLower(),
-                            RelatedTbName = rtbName.ToLower(),
-                            KeyFieldName = keyFieldName.ToLower(),
-                            ValueFieldName = rFields[0] //这个不能转小写，是值
-                        });
-                    }
-                }
-                else
-                {
-                    ExcelTools.Utils.LogInfo($"表头'{head}'前缀格式有误,请检查");
-                    return ret;
-                }
-            }
-
-            //遍历数据库中的必填字段，再Excel表头是否都出现过 <id,isdelete,cjsj,pym,wbm,,jgid,jguuid 代码生成，跳过验证>
-            var strIgnores = ExcelTools.Utils.Config["IgnoreNeedValidFields"];
-            foreach (var desc in curTbDesc.Where(m=>m.IsNeeded && !strIgnores.Contains(m.FieldName)))
-            {
-                //这已经验证过，表头一定在数据库存在,所以不用判空.
-                var entity = list.FirstOrDefault(m => m.FieldName == desc.FieldName);//<通过其他表取的字段 跳过验证>
-                if (entity == null)
-                {
-                    continue;
-                }
-
-                if (entity.Prefix.StartsWith(config[EnumIdentifier.Related.ToString()]))
-                    continue;
-
-                if (list.FirstOrDefault(m => m.FieldName == desc.FieldName) == null)
-                {
-                    ExcelTools.Utils.LogInfo($"表'{tbName}'字段 '{desc.FieldName}' 在数据库为必填字段，在Excel未填！");
-                    return ret;
-                }
-                //其他待补充... to do
-            }
-
-            var retFinal = new Tuple<bool, List<ScanExcelHeadDesc>>(true, ret.Item2);
-            return retFinal;
-        }
-
-        /// <summary>
-        /// 读取表格数据拼接 Sql
-        /// </summary>
-        /// <param name="sheetName"></param>
-        /// <param name="dbName"></param>
-        /// <param name="tbName"></param>
-        /// <param name="tbDescs"></param>
-        /// <param name="scanDescs"></param>
-        /// <param name="JGID"></param>
-        /// <param name="remainErrorCount"></param>
-        /// <param name="uniqDataDic">唯一数据 key:db.tbname.uniqFieldName</param>
-        /// <param name="relatedDataDic">key:dbname.tbname-keyFieldname-valueFieldname</param>
-        /// <param name="startCell"></param>
-        /// <param name="configuration"></param>
-        /// <returns></returns>
-        public ReadExcelDataRet GetSheetExecSql(string sheetName,string dbName, string tbName, 
-            List<TbDesc> tbDescs, List<ScanExcelHeadDesc> scanDescs, string JGIDFieldName,
-            string JGID, ref int remainErrorCount,
-            ref Dictionary<string, List<string>> uniqDataDic,
-            string startCell = "A1", IConfiguration configuration = null)
-        {
-            ExcelTools.Utils.LogInfo($"开始校验sheet表-行数据: {sheetName} --------");
-
-            //思路：获取每行数据，将Excel每个字段(验证格式是否正确) 转成指定类型的值，然后拼接sql
-            //拼接公共表字段
-
-            var rowIndex = 2;//从第二行开始读
-            bool isExistPYWB = scanDescs.Exists(m => m.Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.PYWB.ToString()]));
-            bool isExistJybs= tbDescs.Exists(m => m.FieldName.Equals("jybs"));
-            ReadExcelDataRet ret = new ReadExcelDataRet
-            {
-                ExecParams = new List<DynamicParameters>(),
-                RowIndexs = new List<int>()
-            };
-
-            var treeTbNames = ExcelTools.Utils.Config["treeTbNames"];
-            var isTreeTb = treeTbNames.Contains(tbName);
-            var treeTbFields = ExcelTools.Utils.Config["treeTbFields"];
-            
-            var queryRet = Query(true, sheetName, startCell, configuration);
-            //遍历每行数据
-            foreach (var row in queryRet)
-            {
-                var rowItemPassCount = 0;
-                Dictionary<string, object> rowRetDic = new Dictionary<string, object>();
-                //遍历每个字段
-                foreach (var rowItem in row)
-                {
-                    for (var i = 0; i < scanDescs.Count; i++)
-                    {
-                        if (!scanDescs[i].HeaderName.Equals(rowItem.Key.ToLower()))
-                            continue;
-
-                        object convertValue = null;
-                        object itemValue = rowItem.Value;
-
-                        if (!MyTypeMappingImpl(tbDescs.FirstOrDefault(m => m.FieldName == scanDescs[i].FieldName), scanDescs[i], ref convertValue, itemValue, rowIndex,isTreeTb,treeTbFields))
-                            continue;
-
-                        if (string.IsNullOrEmpty(scanDescs[i].Prefix))
-                        {
-                            rowRetDic.Add(scanDescs[i].FieldName, convertValue);
-                        }
-                        else if (scanDescs[i].Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Related.ToString()])) //关联字段
-                        {
-                            //scanDescs[i].KeyFieldValue = convertValue?.ToString(); //关于找关联字段值
-                            rowRetDic.Add(scanDescs[i].FieldName, convertValue); //用于定位 paramlist 哪一行然后更新值为关联的值
-                        }
-                        else if (scanDescs[i].Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.PYWB.ToString()])) //拼音,五笔
-                        {
-                            rowRetDic.Add(scanDescs[i].FieldName, convertValue);
-                            rowRetDic.Add("pym", convertValue?.ToString().GetFirstPY());
-                            rowRetDic.Add("wbm", convertValue?.ToString().GetFirstWB());
-                        }
-                        else if (scanDescs[i].Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Unique.ToString()])) //唯一
-                        {
-                            var existFlag = false;
-                            //uniqDataDic key:db.tbname.uniqFieldName
-                            if (    uniqDataDic.TryGetValue($"{dbName}.{tbName}.{scanDescs[i].FieldName}", out var list))
-                            {
-                                existFlag = true;
-                                if (convertValue!=null && list.Contains(convertValue.ToString()))
-                                {
-                                    ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDescs[i].HeaderName}'列值 已存在!");
-                                    continue;
-                                }
-                            }
-
-                            if (!existFlag)
-                            {
-                                list = new List<string>();
-                                uniqDataDic.Add($"{dbName}.{tbName}.{scanDescs[i].FieldName}", list);
-                            }
-
-                            //scanDescs[i].KeyFieldValue = convertValue;
-                            list.Add(convertValue?.ToString());
-                            //重置字典
-                            uniqDataDic[$"{dbName}.{tbName}.{scanDescs[i].FieldName}"] = list;
-
-                            rowRetDic.Add(scanDescs[i].FieldName, convertValue);
-                        }
-                        else if (scanDescs[i].Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Encry.ToString()])) // 手机号加密
-                        {
-                            rowRetDic.Add(scanDescs[i].FieldName, convertValue.ToString().ToPhoneCardNoEncryption());
-                        }
-                        else if (scanDescs[i].Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Password.ToString()])) //密码加盐
-                        {
-                            var password = PwdHelper.ToPassWordGetSalt(convertValue.ToString(), out string salt);
-                            rowRetDic.Add(scanDescs[i].FieldName, password);
-                            rowRetDic.Add("mmy", salt);
-                        }
-
-                        rowItemPassCount++;
-                    }
-                }
-
-                ret.AllRowCount++;
-                if (rowItemPassCount== scanDescs.Count)
-                {
-                    ret.RowIndexs.Add(rowIndex++);
-                    DynamicParameters parm = DbConnectionExtensions.GetBaseDynamicParameters(JGIDFieldName,JGID,isExistJybs);
-                    foreach (var rowDic in rowRetDic)
-                    {
-                        parm.Add(rowDic.Key,rowDic.Value);
-                    }
-                    ret.ExecParams.Add(parm);
-                    ret.LegalRowCount++;
-                }
-                else
-                {
-                    ret.RowIndexs.Add(rowIndex++);
-                    ret.IllegalRowCount++;
-                    remainErrorCount--;
-                }
-
-                if (remainErrorCount <= 0)
-                {
-                    ExcelTools.Utils.LogInfo($"已达到最大错误记录数阈值，程序结束！");
-                    return null;
-                }
-            }
-
-            ret.DbName = dbName;
-            ret.TbName = tbName;
-            //密码特殊处理
-            var fieldNameList = scanDescs.Select(m => m.FieldName).ToList();
-            if (tbName.ToLower() == "t_base_user")
-            {
-                fieldNameList.Add("mmy");
-            }
-            ret.ExecSql = DbConnectionExtensions.JoinInsertHeadSql(tbName, fieldNameList, isExistPYWB, isExistJybs, JGIDFieldName, out var v1 );
-            ret.FieldNameList = v1;
-
-            return ret;
-        }
-
-        private static bool MyTypeMappingImpl(TbDesc tbdesc, ScanExcelHeadDesc scanDesc, ref object newValue, object itemValue,int rowIndex,bool isTreeTb, string treeTbFields)
-        {
-            if (itemValue == null && !tbdesc.IsNeeded)
-            {
-                return true;
-            }
-
-            //子关联表
-            if (itemValue == null && isTreeTb && treeTbFields.Contains(tbdesc.FieldName))
-            {
-                newValue = string.Empty;
-                return true;
-            }
-
-
-            if ((itemValue == null || string.IsNullOrEmpty(itemValue.ToString())) && 
-                (tbdesc.IsNeeded && !scanDesc.Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Related.ToString()])))
-            {
-
-
-                ExcelTools.Utils.LogInfo($"第{rowIndex}行，表头{scanDesc.HeaderName} 为必填项！");
-                return false;
-            }
-
-            var type = tbdesc.type;
-            // longtext, varchar(n), decimal,int,bit,datetime,
-            if (type == typeof(string))
-            {
-                if (tbdesc.MaxLength > 0 && itemValue.ToString().Length > tbdesc.MaxLength)
-                {
-                    ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDesc.HeaderName}'列 内容长度超过数据库定义长度！");
-                    return false;
-                }
-                newValue = XmlEncoder.DecodeString(itemValue.ToString());
-            }
-            else if (type == typeof(DateTime))
-            {
-
-                if (itemValue is DateTime || itemValue is DateTime?)
-                    newValue = itemValue;
-                else if (DateTime.TryParse(itemValue.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var _v))
-                    newValue = _v;
-                else if (DateTime.TryParseExact(itemValue.ToString(), "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var _v2))
-                    newValue = _v2;
-                else if (double.TryParse(itemValue.ToString(), NumberStyles.None, CultureInfo.InvariantCulture, out var _d))
-                    newValue = DateTimeHelper.FromOADate(_d);
-                else
-                {
-                    ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDesc.HeaderName}'列 转<datetime>有误！");
-                    return false;
-                }
-            }
-            else if (type == typeof(bool))
-            {
-                var vs = itemValue.ToString();
-                if (vs != "0" || vs != "1")
-                {
-                    ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDesc.HeaderName}'列  转<bool>值出错！");
-
-                    return false;
-                }
-
-                newValue = (vs == "0" ? false : true);
-            }
-            else if (type == typeof(decimal))
-            {
-                if (!decimal.TryParse(itemValue.ToString(), out var _v2))
-                {
-                    ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDesc.HeaderName}'列 转<decimal>出错！");
-                    return false;
-                }
-
-                if (scanDesc.RangeDecimal!=null && scanDesc.Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Range.ToString()]) 
-                    && _v2<scanDesc.RangeDecimal.Item1 
-                    &&_v2> scanDesc.RangeDecimal.Item2)  //范围
-                {
-                    ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDesc.HeaderName}'列 值超出范围！");
-                    return false;
-                }
-                newValue = _v2;
-            }
-            else if (type == typeof(int))
-            {
-                if (!int.TryParse(itemValue.ToString(), out var _v2))
-                {
-                    ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDesc.HeaderName}'列 转int值出错！");
-                    return false;
-                }
-                if (scanDesc.RangeInt != null && scanDesc.Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Range.ToString()])
-                                                  && _v2 < scanDesc.RangeInt.Item1
-                                                  && _v2 > scanDesc.RangeInt.Item2)  //范围
-                {
-                    ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDesc.HeaderName}'列 值超出范围！");
-                    return false;
-                }
-
-                newValue = _v2;
-            }
-            else
-            {
-                return false;
-                //newValue = Convert.ChangeType(itemValue, type);
-            }
-
-            return true;
-        }
-        #endregion
         /// <summary>
         /// 通过Type转List<Object>数据
         /// </summary>

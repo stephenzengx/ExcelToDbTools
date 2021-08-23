@@ -10,6 +10,7 @@ using Dapper;
 using Excel;
 using Excel.OpenXml;
 using Excel.Utils;
+using ExcelTools.SqlScheme;
 using MySql.Data.MySqlClient;
 using static System.Int32;
 
@@ -23,6 +24,7 @@ namespace ExcelTools
         protected static IConfigurationRoot Config = Utils.Config;
         protected static bool HasPassFileValid;
         protected static int Seconds = Utils.Config["SencondLimits"].ToInt32();
+
         protected static string JGID = string.Empty; //机构id
 
         protected static int RemainErrorCount;
@@ -51,7 +53,10 @@ namespace ExcelTools
             OrgsInit();
         }
 
-        private void EditControlsStatuReset()
+        /// <summary>
+        /// 重置状态
+        /// </summary>
+        private void ResetStatus()
         {
             TxtDirPath.Enabled = true;
             DrpDwnOrgs.Enabled = true;
@@ -75,28 +80,28 @@ namespace ExcelTools
             if (!HasPassFileValid)
             {
                 DiagTip("文件校验未通过，请先校验！");
-                EditControlsStatuReset();
+                ResetStatus();
                 return;
             }
 
             if (string.IsNullOrEmpty(JGID))
             {
                 DiagTip("请先选择机构！");
-                EditControlsStatuReset();
+                ResetStatus();
                 return;
             }
 
             if (LastImportTime != null && (DateTime.Now - LastImportTime)?.Seconds <= Seconds)
             {
                 DiagTip($"操作频率过快,{Seconds}s后再试！");
-                EditControlsStatuReset();
+                ResetStatus();
                 return;
             }
 
             if (RemainErrorCount <= 0)
             {
                 Utils.LogInfo("错误记录数已达到阈值，请检查Excel文件！");
-                EditControlsStatuReset();
+                ResetStatus();
                 return;
             }
             #endregion
@@ -112,13 +117,13 @@ namespace ExcelTools
                     if (!ClearBeforeImport())
                     {
                         Utils.LogInfo("删除异常,程序结束！....");
-                        EditControlsStatuReset();
+                        ResetStatus();
                         return;
                     }
                 }
                 else
                 {
-                    EditControlsStatuReset();
+                    ResetStatus();
                     return;
                 }
             }
@@ -126,7 +131,7 @@ namespace ExcelTools
             Utils.LogInfo(GetLineMsg("正在开始导入数据....",true));
             ComfirmImportData();
             HasPassFileValid = false;
-            EditControlsStatuReset();
+            ResetStatus();
             ValidateInit();
         }
 
@@ -359,17 +364,25 @@ namespace ExcelTools
                                 return;
                             }
 
-                            if (sheetSpitArray.Count == 3 &&
-                                sheetSpitArray[2].Equals(Config[EnumIdentifier.Related.ToString()]))
-                            {
-                                cleartbNameList.Add(tbname);
-                            }
-
                             if (!DbTbDescDic.TryGetValue($"{dbName}.{tbname}", out var tbDescs))
                             {
                                 Utils.LogInfo($"{tbname}对应数据库表不存在，请检查");
                                 return;
                             }
+
+                            //导入前清空，或跳过扫描
+                            if (sheetSpitArray.Count == 3 &&
+                                sheetSpitArray[2].Equals(Config[EnumIdentifier.Related.ToString()]))
+                            {
+                                cleartbNameList.Add(tbname);
+                            }
+                            else if (sheetSpitArray.Count == 3 &&
+                                sheetSpitArray[2].Equals(Config[EnumIdentifier.SkipScan.ToString()]))
+                            {
+                                Utils.LogInfo(($"--- '{sheetName}' 表跳过导入----"));
+                                continue;
+                            }
+
 
                             SheetTbMapDic.Add($"{sheetName}", $"{dbName}.{tbname}");
 
@@ -385,16 +398,24 @@ namespace ExcelTools
                     if (cleartbNameList.Count > 0)
                         ClearTbDic.Add(dbName, cleartbNameList);
 
-                    ScanDescDic.Add(dbName, dic);
-
+                    if (dic.Count >= 0)
+                    {
+                        ScanDescDic.Add(dbName, dic);
+                    }
                 }
                 Utils.LogInfo(GetLineMsg("校验Excel表头 通过！", false));
+
+                //Excel里面表都标记为 跳过
+                if (ScanDescDic.Count <= 0)
+                {
+                    Utils.LogInfo($"Excel表sheet表都标记为跳过，无需导入，程序结束！");
+                    return;
+                }
                 #endregion
 
                 #region 数据库提前取出 关联数据 (唯一，关联)
                 foreach (var eachDbScanDesc in ScanDescDic)//dbname:[dbname.tbname : list]
                 {
-                    
                     var dbname = eachDbScanDesc.Key;
                     var retDic = ClearTbDic.TryGetValue(dbname, out var ClearTbNameList); // [dbname: list<string>]
                     var connectionString = Utils.Config.GetConnectionString(dbname);
@@ -430,15 +451,15 @@ namespace ExcelTools
                             {
                                 foreach (var rlDesc in rlDescs)
                                 {
-                                    if (RelatedDataDic.TryGetValue($"{rlDesc.RelatedTbName}.{rlDesc.KeyFieldName}.{rlDesc.ValueFieldName}", out var _ret))//多个表都关联了这个表，避免键值对重复
+                                    if (RelatedDataDic.TryGetValue($"{rlDesc.RelatedFullTbName}.{rlDesc.KeyFieldNamesStr}.{rlDesc.ValueFieldName}", out var _ret))//多个表都关联了这个表，避免键值对重复
                                         continue;
 
                                     //当前sheet表关联表被清空，无需去取数据库关联数据
-                                    if (!retDic || !ClearTbNameList.Contains(rlDesc.RelatedTbName.Split(Config[EnumIdentifier.Dot.ToString()]).ToList()[1]))
+                                    if (!retDic || !ClearTbNameList.Contains(rlDesc.RelatedFullTbName.Split(Config[EnumIdentifier.Dot.ToString()]).ToList()[1]))
                                     {
-                                        var ret = con.GetDicValues(rlDesc.RelatedTbName, rlDesc.KeyFieldName, rlDesc.ValueFieldName, Config[(eachDbScanDesc.Key + "_JGIDName")], JGID);
+                                        var ret = con.GetDicValues(rlDesc.RelatedFullTbName, rlDesc.KeyFileldNameList, rlDesc.ValueFieldName, Config[(eachDbScanDesc.Key + "_JGIDName")], JGID);
                                         //关联基础数据数据 key:dbname.tbname-keyFieldname-valueFieldname
-                                        RelatedDataDic.Add($"{rlDesc.RelatedTbName}.{rlDesc.KeyFieldName}.{rlDesc.ValueFieldName}", ret);
+                                        RelatedDataDic.Add($"{rlDesc.RelatedFullTbName}.{rlDesc.KeyFieldNamesStr}.{rlDesc.ValueFieldName}", ret);
                                     }
                                 }
                             }
@@ -463,11 +484,13 @@ namespace ExcelTools
 
                         foreach (var sheetName in sheetNames)
                         {
-                            var strDbTb = SheetTbMapDic[sheetName];
+                            if(!SheetTbMapDic.TryGetValue(sheetName, out var strDbTb))
+                                continue;
+                            //var strDbTb = SheetTbMapDic[sheetName];
 
                             string[] items = strDbTb.Split(Config[EnumIdentifier.Dot.ToString()]);
 
-                            var ret = xmlSheetReader.GetSheetExecSql(sheetName, items[0], items[1], DbTbDescDic[strDbTb], ScanDescDic[items[0]][strDbTb], JGIDFieldName, JGID,
+                            var ret = xmlSheetReader.GetSheetExecSql(sheetName,items[0], items[1], DbTbDescDic[strDbTb], ScanDescDic[items[0]][strDbTb], JGIDFieldName, JGID,
                                 ref RemainErrorCount, ref UniqDataDic);
                             if (RemainErrorCount <= 0)
                                 return;
@@ -480,30 +503,58 @@ namespace ExcelTools
 
                 Utils.LogInfo(GetLineMsg("开始校验关联数据", true));
                 //校验Excel字段 关联数据   ExecSqlFinalDic 
-                foreach (var dbDesc in ScanDescDic) //dbname : [dbname.tbname : list]
+                foreach (var scanDbDesc in ScanDescDic) //dbname : [dbname.tbname : list]
                 {
-                    foreach (var tbDesc in dbDesc.Value)//每个sheet表
+                    foreach (var scanTbDesc in scanDbDesc.Value)//每个sheet表
                     {
-                        var fullTbName = tbDesc.Key;
-
-                        var treeTbNames = ExcelTools.Utils.Config["treeTbNames"];
+                        var fullTbName = scanTbDesc.Key;
+                        DbTbDescDic.TryGetValue(fullTbName, out var _curTbDescs);//数据表字段描述
+                        var treeTbNames = Utils.Config["treeTbNames"];
                         var singleTbName = fullTbName.Split(Config[EnumIdentifier.Dot.ToString()]).ToList()[1];
                         var isTreeTb = treeTbNames.Contains(singleTbName);
-                        var treeTbFields = ExcelTools.Utils.Config["treeTbFields"];
+                        var treeTbFields = Utils.Config["treeTbFields"];
 
-                        var fieldDescs = tbDesc.Value.Where(m => m.Prefix.Contains(Config[EnumIdentifier.Related.ToString()])).ToList();
-                        if (fieldDescs.Count <= 0)
+                        var scanFieldDescs = scanTbDesc.Value.Where(m => m.Prefix.Contains(Config[EnumIdentifier.Related.ToString()])).ToList();
+                        if (scanFieldDescs.Count <= 0)
                             continue;
 
                         Utils.LogInfo($"fullTbName: {fullTbName} --------");
 
                         var curScanRet = ExecSqlFinalDic[fullTbName];
                         var curParms = curScanRet.ExecParams;
-                        var relatedTbNames = fieldDescs.Select(m => m.RelatedTbName).Distinct();//获取关联表集合
+                        var relatedTbNames = scanFieldDescs.Select(m => m.RelatedFullTbName).Distinct();//获取关联表集合
+                        var noMatchInfos = new List<RltNoMatchInfo>();
+
                         var rScanRetKeyPairs = ExecSqlFinalDic.Where(m => relatedTbNames.Contains(m.Key)).ToList();//关联表 (可能会存在没有的情况)
 
-                        var noMatchInfos = new List<RltNoMatchInfo>(); 
-                        
+                        var Comma = Config[EnumIdentifier.Comma.ToString()];
+                        //多个字段确定关联关系的 比如调价表通过 找 批次表的ypbm以及批次号 确定yppcid  to do//
+                        var multRltScanDescs = scanFieldDescs.Where(m =>m.KeyFileldNameList.Count>1 && m.Prefix.Contains(Config[EnumIdentifier.Related.ToString()])).ToList();
+                        var multRltDic = new Dictionary<string, Dictionary<string, string>>();
+                        foreach (var curFieldDesc in multRltScanDescs)
+                        {
+                            //获取关联表 动态参数
+                            var dParams = rScanRetKeyPairs.FirstOrDefault(m => m.Key == curFieldDesc.RelatedFullTbName);
+                            if (dParams.Equals(default(KeyValuePair<string, ReadExcelDataRet>)))
+                                continue;
+                            var dicSingle = new Dictionary<string, string>();
+                            var rltFields = curFieldDesc.KeyFileldNameList;//多个关联字段
+                            foreach (var param in dParams.Value.ExecParams)
+                            {
+                                var keyStrList = new List<string>();
+                                foreach (var fName in rltFields)
+                                {
+                                    keyStrList.Add(param.Get<string>(fName));
+                                }
+                                dicSingle.Add(string.Join(Comma,keyStrList), param.Get<string>(curFieldDesc.ValueFieldName));
+                            }
+
+                            multRltDic.Add($"{curFieldDesc.RelatedFullTbName}.{curFieldDesc.KeyFieldNamesStr}",dicSingle);//to do
+                        }
+
+                       
+
+
                         /*
                          判断关联数据思路
                          1- 数据库未找到关联数据
@@ -511,36 +562,33 @@ namespace ExcelTools
                          3- Excel 有相关sheet表，但是没有相关数据(Excel没有该字段，有该字段但是没有找到数据)
                          4- 校验通过
                         */
-
-                        for(int i = curParms.Count - 1; i >= 0; i--)    //倒序....
+                        for (int i = curParms.Count - 1; i >= 0; i--)    //倒序....
                         {
                             int rowPassItems = 0;
                             var rowIndex = curScanRet.RowIndexs[i];
 
-                            foreach (var curFieldDesc in fieldDescs) //遍历 关联的字段
+                            foreach (var curScanFieldDesc in scanFieldDescs) //遍历 关联的字段
                             {
                                 //关联值，
-                                var rValues = string.Empty;
-                                var KeyFieldValue = curParms[i].Get<string>(curFieldDesc.FieldName);
-
+                                var relateValues = string.Empty;
+                                var KeyFieldValue = curParms[i].Get<string>(curScanFieldDesc.FieldName);
 
                                 //父级Pid 为空,直接跳过
-                                if (isTreeTb && string.IsNullOrEmpty(KeyFieldValue) &&
-                                    treeTbFields.Contains(curFieldDesc.FieldName))
+                                if (isTreeTb && string.IsNullOrEmpty(KeyFieldValue) && treeTbFields.Contains(curScanFieldDesc.FieldName))
                                 {
                                     rowPassItems++;
                                     continue;
                                 }
 
                                 //从数据库找关联数据
-                                if (RelatedDataDic.TryGetValue($"{curFieldDesc.RelatedTbName}.{curFieldDesc.KeyFieldName}.{curFieldDesc.ValueFieldName}", out var _v1))
+                                if (RelatedDataDic.TryGetValue($"{curScanFieldDesc.RelatedFullTbName}.{curScanFieldDesc.KeyFieldNamesStr}.{curScanFieldDesc.ValueFieldName}", out var _v1))
                                 {
-                                    if (_v1.TryGetValue(KeyFieldValue, out var _v2))
+                                    if(!string.IsNullOrEmpty(KeyFieldValue) && _v1.TryGetValue(KeyFieldValue, out var _v2))
                                     {
-                                        rValues = _v2;
+                                        relateValues = _v2;
                                         if (curParms[i] != null)
                                         {
-                                            curParms[i].Add(curFieldDesc.FieldName, rValues); //覆盖为关联值
+                                            curParms[i].Add(curScanFieldDesc.FieldName, relateValues); //覆盖为关联值
                                             rowPassItems++;
                                             continue;
                                         }
@@ -548,43 +596,103 @@ namespace ExcelTools
                                 }
 
                                 //从导入的Excel找关联数据
-                                if (string.IsNullOrEmpty(rValues))
+                                if (string.IsNullOrEmpty(relateValues))
                                 {
+                                    var isNeeded = _curTbDescs
+                                        .FirstOrDefault(m => m.FieldName == curScanFieldDesc.FieldName).IsNeeded;
+
                                     //是否有相关表  
-                                    var rScanRetDesc = rScanRetKeyPairs.FirstOrDefault(m => m.Key == curFieldDesc.RelatedTbName);
+                                    var rScanRetDesc = rScanRetKeyPairs.FirstOrDefault(m => m.Key == curScanFieldDesc.RelatedFullTbName);
                                     if (rScanRetDesc.Equals(default(KeyValuePair<string, ReadExcelDataRet>)))
                                     {
-                                        noMatchInfos.Add(new RltNoMatchInfo(rowIndex, $"第'{rowIndex}'行数据:{KeyFieldValue} 通过关联'{curFieldDesc.RelatedTbName}'表的{curFieldDesc.KeyFieldName}字段,未找到'{curFieldDesc.ValueFieldName}'字段数据!"));
+                                        noMatchInfos.Add(new RltNoMatchInfo(rowIndex, $"第'{rowIndex}'行数据:{KeyFieldValue?? "'空值'"} 通过关联'{curScanFieldDesc.RelatedFullTbName}'表的{curScanFieldDesc.KeyFieldNamesStr}字段,未找到'{curScanFieldDesc.ValueFieldName}'字段数据!"));
+
+                                        if (isNeeded)
+                                        {
+                                            continue;
+                                        }
+
+                                        curParms[i].Add(curScanFieldDesc.FieldName);
+                                        rowPassItems++;
                                         continue;
                                     }
-                                    //是否有相关字段
-                                    var rParms = rScanRetDesc.Value.ExecParams;
-                                    if (string.IsNullOrEmpty(rParms.FirstOrDefault().Get<string>(curFieldDesc.KeyFieldName)))
+
+                                    if (curScanFieldDesc.KeyFileldNameList.Count <= 1)
+                                    {                                  
+                                        var rParms = rScanRetDesc.Value.ExecParams;
+                                        if (string.IsNullOrEmpty(rParms.FirstOrDefault().Get<string>(curScanFieldDesc.KeyFieldNamesStr)))
+                                        {
+                                            noMatchInfos.Add(new RltNoMatchInfo(rowIndex, $"第'{rowIndex}'行数据:{KeyFieldValue ?? "'空值'"} 通过关联'{curScanFieldDesc.RelatedFullTbName}'表的{curScanFieldDesc.KeyFieldNamesStr}字段,未找到'{curScanFieldDesc.ValueFieldName}'字段数据!"));
+                                            if (isNeeded)
+                                            {
+                                                continue;
+                                            }
+
+                                            curParms[i].Add(curScanFieldDesc.FieldName);
+                                            rowPassItems++;
+                                            continue;
+                                        }
+
+                                        var rValueParms = rParms.FirstOrDefault(o => o.Get<string>(curScanFieldDesc.KeyFieldNamesStr).Equals(KeyFieldValue));
+                                        if (rValueParms == null)
+                                        {
+                                            noMatchInfos.Add(new RltNoMatchInfo(rowIndex, $"第'{rowIndex}'行数据:{KeyFieldValue ?? "'空值'"} 通过关联'{curScanFieldDesc.RelatedFullTbName}'表的{curScanFieldDesc.KeyFieldNamesStr}字段,未找到'{curScanFieldDesc.ValueFieldName}'字段数据!"));
+                                            if (isNeeded)
+                                            {
+                                                continue;
+                                            }
+
+                                            curParms[i].Add(curScanFieldDesc.FieldName);
+                                            rowPassItems++;
+                                            continue;
+                                        }
+
+                                        relateValues = rValueParms.Get<string>(curScanFieldDesc.ValueFieldName);
+                                    }
+                                    else
                                     {
-                                        noMatchInfos.Add(new RltNoMatchInfo(rowIndex, $"第'{rowIndex}'行数据:{KeyFieldValue} 通过关联'{curFieldDesc.RelatedTbName}'表的{curFieldDesc.KeyFieldName}字段,未找到'{curFieldDesc.ValueFieldName}'字段数据!"));
-                                        continue;
+                                        if (!multRltDic.TryGetValue(
+                                            $"{curScanFieldDesc.RelatedFullTbName}.{curScanFieldDesc.KeyFieldNamesStr}", out var _v3))
+                                        {
+                                            noMatchInfos.Add(new RltNoMatchInfo(rowIndex, $"第'{rowIndex}'行数据:{KeyFieldValue ?? "'空值'"} 通过关联'{curScanFieldDesc.RelatedFullTbName}'表的{curScanFieldDesc.KeyFieldNamesStr}字段,未找到'{curScanFieldDesc.ValueFieldName}'字段数据!"));
+
+                                            if (isNeeded)
+                                            {
+                                                continue;
+                                            }
+
+                                            curParms[i].Add(curScanFieldDesc.FieldName);
+                                            rowPassItems++;
+                                            continue;
+                                        }
+
+                                        if (!_v3.TryGetValue(KeyFieldValue, out var _v4))
+                                        {
+                                            noMatchInfos.Add(new RltNoMatchInfo(rowIndex, $"第'{rowIndex}'行数据:{KeyFieldValue ?? "'空值'"} 通过关联'{curScanFieldDesc.RelatedFullTbName}'表的{curScanFieldDesc.KeyFieldNamesStr}字段,未找到'{curScanFieldDesc.ValueFieldName}'字段数据!"));
+                                            if (isNeeded)
+                                            {
+                                                continue;
+                                            }
+
+                                            curParms[i].Add(curScanFieldDesc.FieldName);
+                                            rowPassItems++;
+                                            continue;
+                                        }
+
+                                        relateValues = _v4;
                                     }
 
-
-                                    var rValueParms = rParms.FirstOrDefault(o => o.Get<string>(curFieldDesc.KeyFieldName).Equals(KeyFieldValue));
-                                    if (rValueParms == null)
-                                    {
-                                        noMatchInfos.Add(new RltNoMatchInfo(rowIndex, $"第'{rowIndex}'行数据:{KeyFieldValue} 通过关联'{curFieldDesc.RelatedTbName}'表的{curFieldDesc.KeyFieldName}字段,未找到'{curFieldDesc.ValueFieldName}'字段数据!"));
-                                        continue;
-                                    }
-
-                                    //覆盖值
-                                    curParms[i].Add(curFieldDesc.FieldName, rValueParms.Get<string>(curFieldDesc.ValueFieldName));
-
+                                    //覆盖值  
+                                    curParms[i].Add(curScanFieldDesc.FieldName, relateValues);
                                     rowPassItems++;
                                 }
                             }
                             // 不通过 remain--，LegalRowCount，IllegalRowCount, -》删除该行参数
-                            if (rowPassItems != fieldDescs.Count)
+                            if (rowPassItems != scanFieldDescs.Count)
                             {
                                 curScanRet.ExecParams.Remove(curParms[i]);
                                 curScanRet.LegalRowCount--;
-                                curScanRet.IllegalRowCount++;
+                                curScanRet.IllegalRowIndexSet.Add(rowIndex);
                             }
                         }
 
@@ -607,7 +715,7 @@ namespace ExcelTools
                 foreach (var execItem in ExecSqlFinalDic)
                 {
                     Utils.LogInfo($"{execItem.Key}表：");
-                    Utils.LogInfo($"总条数：{execItem.Value.AllRowCount},通过条数：{execItem.Value.LegalRowCount}，不通过条数：{execItem.Value.IllegalRowCount}");
+                    Utils.LogInfo($"总条数：{execItem.Value.AllRowCount},通过条数：{execItem.Value.LegalRowCount}，不通过条数：{execItem.Value.IllegalRowIndexSet.Count}");
                     //这里调试的时候 可以打印其他的信息 to do
                 }
 
@@ -634,9 +742,12 @@ namespace ExcelTools
             }
         }
 
+        /// <summary>
+        /// 机构初始化
+        /// </summary>
         private void OrgsInit()
         {
-            Console.WriteLine("正在读取机构信息....");
+            Utils.LogInfo("正在读取机构信息....");
             var connectString = Config.GetConnectionString(Config["OrgDb"]);
             if (string.IsNullOrEmpty(connectString))
             {
@@ -665,7 +776,7 @@ namespace ExcelTools
             DrpDwnOrgs.DataSource = infoList;
             DrpDwnOrgs.ValueMember = "Id";
             DrpDwnOrgs.DisplayMember = "Mc";
-            Console.WriteLine("读取机构信息 成功！");
+            Utils.LogInfo("读取机构信息 成功！");
             //DiagTip("导入成功！", MessageBoxIcon.Information);
         }
 
@@ -704,6 +815,7 @@ namespace ExcelTools
 
             Config = Utils.Config;
             Seconds = Utils.Config["SencondLimits"].ToInt32();
+            OrgsInit();
 
             DiagTip("重载成功!");
         }
