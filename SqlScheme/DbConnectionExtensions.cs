@@ -4,11 +4,22 @@ using System.Data;
 using System.Linq;
 using System.Text;
 using Dapper;
+using ExcelTools.DbScheme;
+using ExcelTools.SqlScheme;
+using ForExcelImport;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using MySql.Data.MySqlClient;
 
 namespace ExcelTools
 {
     public static class DbConnectionExtensions
     {
+        /// <summary>
+        /// 批量修改 手机号/身份证号
+        /// </summary>
+        /// <param name="con"></param>
+        /// <param name="list"></param>
         public static void Change_SJHM_ZJHM(this IDbConnection con,List<tb_relative> list)
         {
             var i = 1;
@@ -22,38 +33,96 @@ namespace ExcelTools
 
                 var count = con.Execute($"update t_base_user set sjhm = @sjhm, zjhm=@zjhm where xm=@xm", sParameters);
                 i++;
-                if(count>0)
+                if (count > 0)
                     Console.WriteLine($"{i}-{item.xm} 修改成功");
             }
         }
 
-        public static void TestBulkInsert(this IDbConnection con)
+        /// <summary>
+        /// 测试药品 单位转换
+        /// </summary>
+        public static void TestDrugCalulate()
         {
-            List<DynamicParameters> pParameters = new List<DynamicParameters>();
-            string sql = @" INSERT INTO tb_relative (ID,MC,BM)
-                            VALUES(@ID,@MC,@BM); ";
+            using (DbContext db = DbSchemeHelper.GetTestDbContext(typeof(TestDbContext)))
+            {
+                var drug = db.Set<Drug>().FirstOrDefault(m => m.id == "f9c85319-7f16-4874-b42a-8ca1583b588b");
 
-            for (int i = 0; i < 2; i++)
+                //总量取整
+                var customeUnit = new CustomeUnit($"{drug.ZXDW}/{drug.JLDW}/{drug.BZDW}", $"1/{drug.JLSL}/{drug.BZSL}");
+
+                var num = (int)Math.Ceiling(customeUnit.UnitConversion(2, "把", drug.YLDW));
+            }
+        }
+
+        /// <summary>
+        /// 批量更新 cjry,xgry
+        /// </summary>
+        public static void UpdeteBatchRYID()
+        {
+            var list = new List<string> { "ihdb_lgfy", "cloudih", "ihbase", "ihbase_lgfy" };
+
+            foreach (var dbname in list)
+            {
+                UpdateBatch(dbname);
+            }
+        }
+
+        public static void UpdateBatch(string dbname)
+        {
+            using (IDbConnection con = new MySqlConnection(Utils.Config.GetConnectionString(dbname)))
+            {
+                con.Open();
+
+                DynamicParameters Parameters = new DynamicParameters();
+                Parameters.Add("dbname", dbname);
+
+                var dbsql = @"select LOWER(table_name) from information_schema.tables where table_schema=@dbname"; //__efmigrationshistory
+                var tbNameList = con.Query<string>(dbsql, Parameters);
+
+                foreach (var tbName in tbNameList)
+                {
+                    try
+                    {
+                        DynamicParameters p = new DynamicParameters();
+                        p.Add("cjry", "00000000-0000-0000-0000-000000000000");
+                        p.Add("xgry", "00000000-0000-0000-0000-000000000000");
+
+
+                        var uSql = $"update {tbName} set cjry = @cjry,xgry=@xgry";
+                        con.Execute(uSql, p);
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine(e.Message);
+                    }
+                }
+            }
+        }
+
+        public static void Change_YZ_PYMWBM(this IDbConnection con, List<tb_relative> list)
+        {
+            var i = 1;
+            foreach (var item in list)
             {
                 DynamicParameters sParameters = new DynamicParameters();
 
-                sParameters.Add("ID", "id-" + i);
-                //sParameters.Add("ID", "id-" + i+1);
+                sParameters.Add("pym", item.mc.GetFirstPY());
+                sParameters.Add("wbm", item.mc.GetFirstWB());
+                sParameters.Add("id", item.id);
 
-                sParameters.Add("MC", "MC-" + i);
-                sParameters.Add("BM", "BM-" + i);
-                pParameters.Add(sParameters);
+                var count = con.Execute($"update t_base_medicalorder set pym = @pym, wbm=@wbm where id=@id", sParameters);
+                i++;
+                if (count > 0)
+                    Console.WriteLine($"{i}-{item.mc} 修改成功");
             }
-
-            //var ret = pParameters.FirstOrDefault(o => o.Get<string>("MC").Equals("MC-1"));
-            con.Execute(sql, pParameters); //直接传送list对象
         }
+
         public static void BulkInsert(this IDbConnection con, string execSql, List<DynamicParameters> pParameters)
         {
             con.Execute(execSql, pParameters); //直接传送list对象
         }
 
-        public static List<string> CommonFieldNames = new List<string> { "id", "isdeleted", "cjsj", "cjry","cjrymc","xgsj"};
+        public static List<string> CommonFieldNames = new List<string> { "id", "isdeleted", "cjsj", "cjry","cjrymc","xgsj","xgry","xgrymc"};
 
         public static List<string> PYWBS = new List<string>{"pym","wbm"};
 
@@ -110,11 +179,14 @@ namespace ExcelTools
             parm.Add("id", Guid.NewGuid().ToString());
             parm.Add(JGIDFiledName, JGID);
             parm.Add("isdeleted", 0);
-            parm.Add("cjrymc", "cjry-mc");
-            parm.Add("cjry", "cjry-id");
-            parm.Add("cjsj", DateTime.Now);
-            parm.Add("xgsj", DateTime.Now);
 
+            parm.Add("cjry", "00000000-0000-0000-0000-000000000000");
+            parm.Add("cjrymc", string.Empty);
+            parm.Add("cjsj", DateTime.Now);
+
+            parm.Add("xgry", "00000000-0000-0000-0000-000000000000");
+            parm.Add("xgrymc", string.Empty);
+            parm.Add("xgsj", DateTime.Now);
 
             if (isExistJybs)
                 parm.Add("jybs", false);

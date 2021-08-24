@@ -10,7 +10,10 @@ using Dapper;
 using Excel;
 using Excel.OpenXml;
 using Excel.Utils;
+using ExcelTools.DbScheme;
 using ExcelTools.SqlScheme;
+using ForExcelImport;
+using Microsoft.EntityFrameworkCore;
 using MySql.Data.MySqlClient;
 using static System.Int32;
 
@@ -49,9 +52,12 @@ namespace ExcelTools
         public Form1()
         {
             InitializeComponent();
-
             OrgsInit();
+
+            Utils.LogInfo(GetLineMsg("开始校验文件", true));
+            Utils.LogInfo(GetLineMsg("校验文件 成功", false));
         }
+
 
         /// <summary>
         /// 重置状态
@@ -358,6 +364,21 @@ namespace ExcelTools
                             }
 
                             var tbname = sheetSpitArray[0].ToLower();
+
+                            //导入前清空，或跳过扫描
+                            if (sheetSpitArray.Count == 3 &&
+                                sheetSpitArray[2].Equals(Config[EnumIdentifier.Related.ToString()]))
+                            {
+                                cleartbNameList.Add(tbname);
+                            }
+                            else if (sheetSpitArray.Count == 3 &&
+                                     sheetSpitArray[2].Equals(Config[EnumIdentifier.SkipScan.ToString()]))
+                            {
+                                Utils.LogInfo(($"--- '{sheetName}' 表跳过导入----"));
+                                continue;
+                            }
+
+
                             if (tbNameList.Any(m => m.Equals(tbname)))
                             {
                                 Utils.LogInfo($"sheet名'{sheetName}'-关联表名'{tbname}'重复出现，请检查!");
@@ -370,18 +391,7 @@ namespace ExcelTools
                                 return;
                             }
 
-                            //导入前清空，或跳过扫描
-                            if (sheetSpitArray.Count == 3 &&
-                                sheetSpitArray[2].Equals(Config[EnumIdentifier.Related.ToString()]))
-                            {
-                                cleartbNameList.Add(tbname);
-                            }
-                            else if (sheetSpitArray.Count == 3 &&
-                                sheetSpitArray[2].Equals(Config[EnumIdentifier.SkipScan.ToString()]))
-                            {
-                                Utils.LogInfo(($"--- '{sheetName}' 表跳过导入----"));
-                                continue;
-                            }
+   
 
 
                             SheetTbMapDic.Add($"{sheetName}", $"{dbName}.{tbname}");
