@@ -28,30 +28,32 @@ namespace ExcelTools
         /// 记录日志
         /// </summary>
         /// <param name="msg"></param>
-        public static void LogInfo(string msg)
+        public static void LogInfo(string msg,bool timeFlag=true)
         {
             Console.WriteLine(msg);
             if(IsRecordLog)
-                WriteLogLine(msg);    
+                WriteLogLine(msg,timeFlag);    
         }
 
         /// <summary>
         /// 写日志
         /// </summary>
         /// <param name="msg"></param>
-        public static void WriteLogLine(string msg)
+        public static void WriteLogLine(string msg,bool timeFlag=true)
         {
             string logName = DateTime.Now.ToString("yyyyMMdd");
             string logFilePath = Path.Combine(BasePath, "log", logName + ".txt");
             if (!File.Exists(logFilePath))
             {
-                using (FileStream stream = File.Create(logFilePath))
+                using (File.Create(logFilePath))
                 {
 
                 }
             }
 
-            File.AppendAllText(logFilePath, DateTime.Now + " " + msg + "\r\n");
+            var content = (timeFlag ? DateTime.Now.ToString() : "") + " " + msg + "\r\n";
+
+            File.AppendAllText(logFilePath, content);
         }
     }
 }

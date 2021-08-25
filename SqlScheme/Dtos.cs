@@ -100,6 +100,7 @@ namespace ExcelTools
         public string RKey { get; set; }
         public string RValue { get; set; }
     }
+
     public class HospitalInfo
     {
         public string Id { get; set; }

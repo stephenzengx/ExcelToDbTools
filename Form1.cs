@@ -10,10 +10,6 @@ using Dapper;
 using Excel;
 using Excel.OpenXml;
 using Excel.Utils;
-using ExcelTools.DbScheme;
-using ExcelTools.SqlScheme;
-using ForExcelImport;
-using Microsoft.EntityFrameworkCore;
 using MySql.Data.MySqlClient;
 using static System.Int32;
 
@@ -130,7 +126,7 @@ namespace ExcelTools
                 }
             }
 
-            Utils.LogInfo(GetLineMsg("正在开始导入数据....",true));
+            Utils.LogInfo(GetLineMsg("正在开始导入数据....",true),false);
             ComfirmImportData();
             HasPassFileValid = false;
             ResetStatus();
@@ -143,7 +139,7 @@ namespace ExcelTools
         /// <returns></returns>
         private bool ClearBeforeImport()
         {
-            Utils.LogInfo(GetLineMsg("开始清空表数据！....",true));
+            Utils.LogInfo(GetLineMsg("开始清空表数据！....",true), false);
             var ret = true;
             using (IDbConnection con = new MySqlConnection(Config.GetConnectionString(ClearTbDic.FirstOrDefault().Key)))
             {
@@ -174,7 +170,7 @@ namespace ExcelTools
             }
 
             ClearTbDic = new Dictionary<string, List<string>>();
-            Utils.LogInfo(GetLineMsg("清空表数据成功！....", false));
+            Utils.LogInfo(GetLineMsg("清空表数据成功！....", false), false);
 
             return ret;
         }
@@ -208,7 +204,7 @@ namespace ExcelTools
                 }
                 catch (Exception ex)
                 {
-                    Utils.LogInfo(GetLineMsg("导入失败,请检查！....",false));
+                    Utils.LogInfo("导入失败,请检查！....");
                     Utils.LogInfo(ex.Message + "\r\n" + ex.StackTrace);
 
                     transaction.Rollback();
@@ -216,7 +212,7 @@ namespace ExcelTools
                 }
             }
 
-            Utils.LogInfo(GetLineMsg("导入成功，程序结束！....",false));
+            Utils.LogInfo(GetLineMsg("导入成功，程序结束！....",false), false);
         }
 
         /// <summary>
@@ -295,7 +291,7 @@ namespace ExcelTools
                 #endregion
 
                 #region 校验文件
-                Utils.LogInfo(GetLineMsg("开始校验文件", true));
+                Utils.LogInfo(GetLineMsg("开始校验文件", true),false);
                 foreach (var file in Files)
                 {
                     //f.fullName 绝对路径 放在hidden Field里面
@@ -323,11 +319,11 @@ namespace ExcelTools
                             return;
                     }
                 }
-                Utils.LogInfo(GetLineMsg("校验文件 通过！", false));
+                Utils.LogInfo(GetLineMsg("校验文件 通过！", false), false);
                 #endregion
 
                 #region 校验 Excel表头
-                Utils.LogInfo(GetLineMsg("开始校验Excel表头", true));
+                Utils.LogInfo(GetLineMsg("开始校验Excel表头", true), false);
                 foreach (var file in Files)
                 {
                     var dbStrArr = file.Name.Split(Config[EnumIdentifier.SpitChar.ToString()]);
@@ -409,7 +405,7 @@ namespace ExcelTools
                         ScanDescDic.Add(dbName, dic);
                     }
                 }
-                Utils.LogInfo(GetLineMsg("校验Excel表头 通过！", false));
+                Utils.LogInfo(GetLineMsg("校验Excel表头 通过！", false), false);
 
                 //Excel里面表都标记为 跳过
                 if (ScanDescDic.Count <= 0)
@@ -475,7 +471,7 @@ namespace ExcelTools
                 #endregion
 
                 #region 校验行数据
-                Utils.LogInfo(GetLineMsg("开始校验Excel行数据", true));
+                Utils.LogInfo(GetLineMsg("开始校验Excel行数据", true), false);
                 //校验Excel字段数据 
                 foreach (var file in Files)
                 {
@@ -505,9 +501,9 @@ namespace ExcelTools
                         }
                     }
                 }
-                Utils.LogInfo(GetLineMsg("校验Excel行数据 通过！", false));
+                Utils.LogInfo(GetLineMsg("校验Excel行数据 通过！", false), false);
 
-                Utils.LogInfo(GetLineMsg("开始校验关联数据", true));
+                Utils.LogInfo(GetLineMsg("开始校验关联数据", true), false);
                 //校验Excel字段 关联数据   ExecSqlFinalDic 
                 foreach (var scanDbDesc in ScanDescDic) //dbname : [dbname.tbname : list]
                 {
@@ -712,11 +708,11 @@ namespace ExcelTools
                     }
 
                 }
-                Utils.LogInfo(GetLineMsg("校验关联数据 通过！", false));
+                Utils.LogInfo(GetLineMsg("校验关联数据 通过！", false), false);
                 #endregion
 
                 #region 校验结果 输出
-                Utils.LogInfo(GetLineMsg("所有校验项已全部通过，正在统计校验结果....", true));
+                Utils.LogInfo(GetLineMsg("所有校验项已全部通过，正在统计校验结果....", true), false);
                 //key: dbname.tbname
                 foreach (var execItem in ExecSqlFinalDic)
                 {
