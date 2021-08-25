@@ -39,6 +39,36 @@ namespace ExcelTools
         }
 
         /// <summary>
+        /// 批量修改密码
+        /// </summary>
+        public static void ChangeMM()
+        {
+            var dbname = "ihbase";
+            using (IDbConnection con = new MySqlConnection(Utils.Config.GetConnectionString(dbname)))
+            {
+                con.Open();
+
+                DynamicParameters Parameters = new DynamicParameters();
+                Parameters.Add("jgid", "c28c7004-9f80-4460-8510-b626710e3b24");
+
+                var dbsql = @"select id from t_base_user where yljguuid=@jgid"; //__efmigrationshistory
+                var ids = con.Query<string>(dbsql, Parameters);
+
+                foreach (var id in ids)
+                {
+                    var password = PwdHelper.ToPassWordGetSalt("Hlwyy@135", out string salt);
+
+                    DynamicParameters p = new DynamicParameters();
+                    p.Add("mm", password);
+                    p.Add("mmy", salt);
+
+                    var uSql = $"update t_base_user set mm =@mm,mmy=@mmy ";
+                    con.Execute(uSql, p);
+                }
+            }
+        }
+
+        /// <summary>
         /// 测试药品 单位转换
         /// </summary>
         public static void TestDrugCalulate()
@@ -232,7 +262,7 @@ namespace ExcelTools
                 {
                     descList[i].type = typeof(bool);
                 }
-                else if (dbType.StartsWith("datetime"))
+                else if (dbType.StartsWith("datetime") || dbType.StartsWith("date"))
                 {
                     descList[i].type = typeof(DateTime);
                 }

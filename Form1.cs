@@ -53,11 +53,7 @@ namespace ExcelTools
         {
             InitializeComponent();
             OrgsInit();
-
-            Utils.LogInfo(GetLineMsg("开始校验文件", true));
-            Utils.LogInfo(GetLineMsg("校验文件 成功", false));
         }
-
 
         /// <summary>
         /// 重置状态
