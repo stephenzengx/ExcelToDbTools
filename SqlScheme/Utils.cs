@@ -22,6 +22,7 @@ namespace ExcelTools
         {
             var configurationBuilder = new ConfigurationBuilder().SetBasePath(Directory.GetCurrentDirectory()).AddJsonFile("AppSettings.Json");
             Config = configurationBuilder.Build();
+            IsRecordLog = Config["IsRecordLog"] == "1";
         }
 
         /// <summary>

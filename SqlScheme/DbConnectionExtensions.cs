@@ -89,7 +89,7 @@ namespace ExcelTools
         /// </summary>
         public static void UpdeteBatchRYID()
         {
-            var list = new List<string> { "ihdb_lgfy", "cloudih", "ihbase", "ihbase_lgfy" };
+            var list = new List<string> { "ihbase" }; //"ihbase_lgfy" ,"ihdb_lgfy" ,"cloudih", "cloudih" 
 
             foreach (var dbname in list)
             {
@@ -114,11 +114,13 @@ namespace ExcelTools
                     try
                     {
                         DynamicParameters p = new DynamicParameters();
-                        p.Add("cjry", "00000000-0000-0000-0000-000000000000");
-                        p.Add("xgry", "00000000-0000-0000-0000-000000000000");
+                        //p.Add("cjry", "00000000-0000-0000-0000-000000000000");
+                        //p.Add("xgry", "00000000-0000-0000-0000-000000000000");
+                        p.Add("xgsj", DateTime.Now);
 
 
-                        var uSql = $"update {tbName} set cjry = @cjry,xgry=@xgry";
+
+                        var uSql = $"update {tbName} set xgsj=@xgsj"; // cjry = @cjry,xgry=@xgry
                         con.Execute(uSql, p);
                     }
                     catch (Exception e)
@@ -207,6 +209,11 @@ namespace ExcelTools
         {
             DynamicParameters parm = new DynamicParameters();
             parm.Add("id", Guid.NewGuid().ToString());
+            if (string.IsNullOrEmpty(JGIDFiledName))
+            {
+                throw  new Exception("获取JGIDFiledName出错，请检查配置");
+            }
+
             parm.Add(JGIDFiledName, JGID);
             parm.Add("isdeleted", 0);
 

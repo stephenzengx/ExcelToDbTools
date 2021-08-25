@@ -364,7 +364,7 @@ namespace Excel.OpenXml
             ref Dictionary<string, List<string>> uniqDataDic,
             string startCell = "A1", IConfiguration configuration = null)
         {
-            ExcelTools.Utils.LogInfo($"开始校验sheet表-行数据: {sheetName} --------");
+            ExcelTools.Utils.LogInfo($"开始校验sheet表{sheetName} 行数据 --------");
 
             //思路：获取每行数据，将Excel每个字段(验证格式是否正确) 转成指定类型的值，然后拼接sql
             //拼接公共表字段
@@ -474,7 +474,7 @@ namespace Excel.OpenXml
                         }
                         else if (scanDescs[i].Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Password.ToString()])) //密码加盐
                         {
-                            //密码 和 盐 增加长度判断 to do...
+                            //密码 和 盐 增加长度判断 
                             var password = PwdHelper.ToPassWordGetSalt(convertValue.ToString(), out string salt);
                             rowRetDic.Add(scanDescs[i].FieldName, password);
                             rowRetDic.Add("mmy", salt);
