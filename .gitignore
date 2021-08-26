@@ -211,3 +211,4 @@ ModelManifest.xml
 /TestApi1/WebApiOne/Web.Debug.config
 /TestApi1/WebApiOne/Web.Release.config
 App_Data
+/Properties/PublishProfiles

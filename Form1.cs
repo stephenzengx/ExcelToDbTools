@@ -44,7 +44,6 @@ namespace ExcelTools
         //[db,list] 导入前清空表字典
         protected static Dictionary<string, List<string>> ClearTbDic = new Dictionary<string, List<string>>();
         #endregion
-
         public Form1()
         {
             InitializeComponent();
@@ -800,7 +799,7 @@ namespace ExcelTools
         /// <returns></returns>
         private string GetLineMsg(string msg,bool IsStart)
         {
-            return IsStart ? "\r\n\r\n----------"+ DateTime.Now +"--" + msg + "----------" : "  -----" + DateTime.Now + "--" + msg + "-----";
+            return IsStart ? "\r\n----------"+ DateTime.Now +"--" + msg + "----------" : "  -----" + DateTime.Now + "--" + msg + "-----";
         }
 
         /// <summary>
