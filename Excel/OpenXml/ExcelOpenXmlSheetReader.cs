@@ -129,7 +129,8 @@ namespace Excel.OpenXml
                 var Prefix = spitItems[0];
                 if (Prefix.Contains(config[EnumIdentifier.Unique.ToString()])
                     || Prefix.Contains(config[EnumIdentifier.PYWB.ToString()])
-                    || Prefix.StartsWith(config[EnumIdentifier.Encry.ToString()]))
+                    || Prefix.StartsWith(config[EnumIdentifier.Encry.ToString()])
+                    || Prefix.StartsWith(config[EnumIdentifier.Password.ToString()]))
                 {
                     if (spitItems.Count != 2)
                     {
@@ -518,7 +519,7 @@ namespace Excel.OpenXml
             {
                 fieldNameList.Add("mmy");
             }
-            ret.ExecSql = DbConnectionExtensions.JoinInsertHeadSql(tbName, fieldNameList, isExistPYWB, isExistJybs, JGIDFieldName, out var v1);
+            ret.ExecSql = DbConnectionExtensions.JoinInsertHeadSql(dbName,tbName, fieldNameList, isExistPYWB, isExistJybs, JGIDFieldName, out var v1);
             ret.FieldNameList = v1;
 
             return ret;
@@ -545,6 +546,11 @@ namespace Excel.OpenXml
             {
                 ExcelTools.Utils.LogInfo($"第{rowIndex}行，表头{scanDesc.HeaderName} 为必填项！");
                 return false;
+            }
+
+            if (itemValue == null)
+            {
+                throw new Exception("存在空行数据！请清理表格后再导入");
             }
 
             var type = tbdesc.type;

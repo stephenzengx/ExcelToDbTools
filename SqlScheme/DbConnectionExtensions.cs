@@ -167,7 +167,7 @@ namespace ExcelTools
         /// <param name="JGIDFieldName"></param>
         /// <param name="existFieldNames"></param>
         /// <returns></returns>
-        public static string JoinInsertHeadSql(string tbname, List<string> fieldNames, bool isPyWB, bool isExistJybs, string JGIDFieldName,  out List<string> existFieldNames)
+        public static string JoinInsertHeadSql(string dbname, string tbname, List<string> fieldNames, bool isPyWB, bool isExistJybs, string JGIDFieldName,  out List<string> existFieldNames)
         {
             StringBuilder sb = new StringBuilder();
 
@@ -185,7 +185,7 @@ namespace ExcelTools
                 fieldNames.Add("jybs");
             }
 
-            sb.Append($" INSERT INTO {tbname} ({string.Join(",", fieldNames)}) ");
+            sb.Append($" INSERT INTO {dbname}.{tbname} ({string.Join(",", fieldNames)}) ");
 
             for (int i = 0; i < fieldNames.Count; i++)
             {

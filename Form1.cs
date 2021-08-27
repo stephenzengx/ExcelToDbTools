@@ -621,7 +621,7 @@ namespace ExcelTools
                                     if (curScanFieldDesc.KeyFileldNameList.Count <= 1)
                                     {                                  
                                         var rParms = rScanRetDesc.Value.ExecParams;
-                                        if (string.IsNullOrEmpty(rParms.FirstOrDefault().Get<string>(curScanFieldDesc.KeyFieldNamesStr)))
+                                        if (string.IsNullOrEmpty(rParms.FirstOrDefault()?.Get<string>(curScanFieldDesc.KeyFieldNamesStr)))
                                         {
                                             noMatchInfos.Add(new RltNoMatchInfo(rowIndex, $"第'{rowIndex}'行数据:{KeyFieldValue ?? "'空值'"} 通过关联'{curScanFieldDesc.RelatedFullTbName}'表的{curScanFieldDesc.KeyFieldNamesStr}字段,未找到'{curScanFieldDesc.ValueFieldName}'字段数据!"));
                                             if (isNeeded)
