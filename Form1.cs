@@ -458,7 +458,8 @@ namespace ExcelTools
                                     //当前sheet表关联表被清空，无需去取数据库关联数据
                                     if (!retDic || !ClearTbNameList.Contains(rlDesc.RelatedFullTbName.Split(Config[EnumIdentifier.Dot.ToString()]).ToList()[1]))
                                     {
-                                        var ret = con.GetDicValues(rlDesc.RelatedFullTbName, rlDesc.KeyFileldNameList, rlDesc.ValueFieldName, Config[(eachDbScanDesc.Key + "_JGIDName")], JGID);
+                                        var singleTbName = rlDesc.RelatedFullTbName.Split(Config[EnumIdentifier.Dot.ToString()])[0];
+                                        var ret = con.GetDicValues(rlDesc.RelatedFullTbName, rlDesc.KeyFileldNameList, rlDesc.ValueFieldName, Config[(singleTbName + "_JGIDName")], JGID);
                                         //关联基础数据数据 key:dbname.tbname-keyFieldname-valueFieldname
                                         RelatedDataDic.Add($"{rlDesc.RelatedFullTbName}.{rlDesc.KeyFieldNamesStr}.{rlDesc.ValueFieldName}", ret);
                                     }
