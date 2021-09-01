@@ -4,9 +4,9 @@ using System.Data;
 using System.Linq;
 using System.Text;
 using Dapper;
-using ExcelTools.DbScheme;
+//using ExcelTools.DbScheme;
 using ExcelTools.SqlScheme;
-using ForExcelImport;
+//using ForExcelImport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using MySql.Data.MySqlClient;
@@ -20,23 +20,23 @@ namespace ExcelTools
         /// </summary>
         /// <param name="con"></param>
         /// <param name="list"></param>
-        public static void Change_SJHM_ZJHM(this IDbConnection con,List<tb_relative> list)
-        {
-            var i = 1;
-            foreach (var item in list)
-            {
-                DynamicParameters sParameters = new DynamicParameters();
+        //public static void Change_SJHM_ZJHM(this IDbConnection con,List<tb_relative> list)
+        //{
+        //    var i = 1;
+        //    foreach (var item in list)
+        //    {
+        //        DynamicParameters sParameters = new DynamicParameters();
 
-                sParameters.Add("xm", item.xm);
-                sParameters.Add("sjhm", item.sjhm.ToPhoneCardNoEncryption());
-                sParameters.Add("zjhm", item.zjhm.ToPhoneCardNoEncryption());
+        //        sParameters.Add("xm", item.xm);
+        //        sParameters.Add("sjhm", item.sjhm.ToPhoneCardNoEncryption());
+        //        sParameters.Add("zjhm", item.zjhm.ToPhoneCardNoEncryption());
 
-                var count = con.Execute($"update t_base_user set sjhm = @sjhm, zjhm=@zjhm where xm=@xm", sParameters);
-                i++;
-                if (count > 0)
-                    Console.WriteLine($"{i}-{item.xm} 修改成功");
-            }
-        }
+        //        var count = con.Execute($"update t_base_user set sjhm = @sjhm, zjhm=@zjhm where xm=@xm", sParameters);
+        //        i++;
+        //        if (count > 0)
+        //            Console.WriteLine($"{i}-{item.xm} 修改成功");
+        //    }
+        //}
 
         /// <summary>
         /// 批量修改密码
@@ -71,18 +71,18 @@ namespace ExcelTools
         /// <summary>
         /// 测试药品 单位转换
         /// </summary>
-        public static void TestDrugCalulate()
-        {
-            using (DbContext db = DbSchemeHelper.GetTestDbContext(typeof(TestDbContext)))
-            {
-                var drug = db.Set<Drug>().FirstOrDefault(m => m.id == "f9c85319-7f16-4874-b42a-8ca1583b588b");
+        //public static void TestDrugCalulate()
+        //{
+        //    using (DbContext db = DbSchemeHelper.GetTestDbContext(typeof(TestDbContext)))
+        //    {
+        //        var drug = db.Set<Drug>().FirstOrDefault(m => m.id == "f9c85319-7f16-4874-b42a-8ca1583b588b");
 
-                //总量取整
-                var customeUnit = new CustomeUnit($"{drug.ZXDW}/{drug.JLDW}/{drug.BZDW}", $"1/{drug.JLSL}/{drug.BZSL}");
+        //        //总量取整
+        //        var customeUnit = new CustomeUnit($"{drug.ZXDW}/{drug.JLDW}/{drug.BZDW}", $"1/{drug.JLSL}/{drug.BZSL}");
 
-                var num = (int)Math.Ceiling(customeUnit.UnitConversion(2, "把", drug.YLDW));
-            }
-        }
+        //        var num = (int)Math.Ceiling(customeUnit.UnitConversion(2, "把", drug.YLDW));
+        //    }
+        //}
 
         /// <summary>
         /// 批量更新 cjry,xgry
@@ -131,23 +131,23 @@ namespace ExcelTools
             }
         }
 
-        public static void Change_YZ_PYMWBM(this IDbConnection con, List<tb_relative> list)
-        {
-            var i = 1;
-            foreach (var item in list)
-            {
-                DynamicParameters sParameters = new DynamicParameters();
+        //public static void Change_YZ_PYMWBM(this IDbConnection con, List<tb_relative> list)
+        //{
+        //    var i = 1;
+        //    foreach (var item in list)
+        //    {
+        //        DynamicParameters sParameters = new DynamicParameters();
 
-                sParameters.Add("pym", item.mc.GetFirstPY());
-                sParameters.Add("wbm", item.mc.GetFirstWB());
-                sParameters.Add("id", item.id);
+        //        sParameters.Add("pym", item.mc.GetFirstPY());
+        //        sParameters.Add("wbm", item.mc.GetFirstWB());
+        //        sParameters.Add("id", item.id);
 
-                var count = con.Execute($"update t_base_medicalorder set pym = @pym, wbm=@wbm where id=@id", sParameters);
-                i++;
-                if (count > 0)
-                    Console.WriteLine($"{i}-{item.mc} 修改成功");
-            }
-        }
+        //        var count = con.Execute($"update t_base_medicalorder set pym = @pym, wbm=@wbm where id=@id", sParameters);
+        //        i++;
+        //        if (count > 0)
+        //            Console.WriteLine($"{i}-{item.mc} 修改成功");
+        //    }
+        //}
 
         public static void BulkInsert(this IDbConnection con, string execSql, List<DynamicParameters> pParameters)
         {

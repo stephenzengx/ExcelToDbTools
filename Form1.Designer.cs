@@ -48,7 +48,7 @@ namespace ExcelTools
             this.TxtDirPath.Name = "TxtDirPath";
             this.TxtDirPath.Size = new System.Drawing.Size(162, 23);
             this.TxtDirPath.TabIndex = 0;
-            this.TxtDirPath.Text = "F:/导入文件夹";
+            this.TxtDirPath.Text = "D:/数据导入";
             // 
             // BtnStartImport
             // 
