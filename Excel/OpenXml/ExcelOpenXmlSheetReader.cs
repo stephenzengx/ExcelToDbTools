@@ -557,12 +557,12 @@ namespace Excel.OpenXml
             // longtext, varchar(n), decimal,int,bit,datetime,
             if (type == typeof(string))
             {
-                if (tbdesc.MaxLength > 0 && itemValue.ToString().Length > tbdesc.MaxLength)
+                var flag = scanDesc.Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Related.ToString()]);
+                if (!flag && tbdesc.MaxLength > 0 && itemValue.ToString().Length > tbdesc.MaxLength)
                 {
                     ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDesc.HeaderName}' 列值: {itemValue}长度为{itemValue.ToString().Length}, 超过数据库定义最大长度{tbdesc.MaxLength}!");
                     return false;
                 }
-                newValue = XmlEncoder.DecodeString(itemValue.ToString());
             }
             else if (type == typeof(DateTime))
             {
