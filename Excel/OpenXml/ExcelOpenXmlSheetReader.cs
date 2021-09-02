@@ -427,6 +427,10 @@ namespace Excel.OpenXml
                         }
                         else if (scanDescs[i].Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.PYWB.ToString()])) //拼音,五笔
                         {
+                            if (convertValue == null)
+                            {
+                                Console.WriteLine();
+                            }
                             rowRetDic.Add(scanDescs[i].FieldName, convertValue);
                             var pym = convertValue?.ToString().GetFirstPY();
                             var wbm = convertValue?.ToString().GetFirstWB();
@@ -557,12 +561,14 @@ namespace Excel.OpenXml
             // longtext, varchar(n), decimal,int,bit,datetime,
             if (type == typeof(string))
             {
-                var flag = scanDesc.Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Related.ToString()]);
-                if (!flag && tbdesc.MaxLength > 0 && itemValue.ToString().Length > tbdesc.MaxLength)
+                //关联字段不判断长度
+                var relatedFlag = scanDesc.Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Related.ToString()]);
+                if (!relatedFlag && tbdesc.MaxLength > 0 && itemValue.ToString().Length > tbdesc.MaxLength)
                 {
                     ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDesc.HeaderName}' 列值: {itemValue}长度为{itemValue.ToString().Length}, 超过数据库定义最大长度{tbdesc.MaxLength}!");
                     return false;
                 }
+                newValue = itemValue?.ToString();
             }
             else if (type == typeof(DateTime))
             {
