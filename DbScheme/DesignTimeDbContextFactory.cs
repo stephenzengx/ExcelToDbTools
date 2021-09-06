@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
 
-namespace ForExcelImport
+namespace ExcelTools
 {
     public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<TestDbContext>
     {

@@ -1,7 +1,6 @@
-﻿using ExcelTools.DbScheme;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 
-namespace ForExcelImport
+namespace ExcelTools
 {
     public class TestDbContext : DbContext
     {

@@ -427,10 +427,6 @@ namespace Excel.OpenXml
                         }
                         else if (scanDescs[i].Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.PYWB.ToString()])) //拼音,五笔
                         {
-                            if (convertValue == null)
-                            {
-                                Console.WriteLine();
-                            }
                             rowRetDic.Add(scanDescs[i].FieldName, convertValue);
                             var pym = convertValue?.ToString().GetFirstPY();
                             var wbm = convertValue?.ToString().GetFirstWB();

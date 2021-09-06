@@ -8,12 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="DbScheme\**" />
-    <EmbeddedResource Remove="DbScheme\**" />
-    <None Remove="DbScheme\**" />
-  </ItemGroup>
-
-  <ItemGroup>
     <None Remove="pinyinwubi.xml" />
   </ItemGroup>
 

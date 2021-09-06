@@ -3,7 +3,7 @@ using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace ExcelTools.DbScheme
+namespace ExcelTools
 {
     /// <summary>
     /// 药品字典
