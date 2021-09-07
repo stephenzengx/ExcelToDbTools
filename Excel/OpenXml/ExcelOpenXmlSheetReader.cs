@@ -550,6 +550,7 @@ namespace Excel.OpenXml
 
             if (itemValue == null)
             {
+                Console.WriteLine($"{tbdesc.FullTbName}第{rowIndex}行，表头{scanDesc.HeaderName} 数据为空，但为必填项");
                 throw new Exception("存在空行数据！请清理表格后再导入");
             }
 
