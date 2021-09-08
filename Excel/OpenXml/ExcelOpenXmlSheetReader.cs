@@ -586,7 +586,7 @@ namespace Excel.OpenXml
             else if (type == typeof(bool))
             {
                 var vs = itemValue.ToString();
-                if (vs != "0" || vs != "1")
+                if (vs != "0" && vs != "1")
                 {
                     ExcelTools.Utils.LogInfo($"第{rowIndex}行，'{scanDesc.HeaderName}'列  转<bool>值出错！");
 
