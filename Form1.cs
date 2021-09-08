@@ -530,7 +530,7 @@ namespace ExcelTools
                         var rScanRetKeyPairs = ExecSqlFinalDic.Where(m => relatedTbNames.Contains(m.Key)).ToList();//关联表 (可能会存在没有的情况)
 
                         var Comma = Config[EnumIdentifier.Comma.ToString()];
-                        //多个字段确定关联关系的 比如调价表通过 找 批次表的ypbm以及批次号 确定yppcid  to do//
+                        //多个字段确定关联关系的 比如调价表通过 找 批次表的ypbm以及批次号 确定yppcid 
                         var multRltScanDescs = scanFieldDescs.Where(m =>m.KeyFileldNameList.Count>1 && m.Prefix.Contains(Config[EnumIdentifier.Related.ToString()])).ToList();
                         var multRltDic = new Dictionary<string, Dictionary<string, string>>();
                         foreach (var curFieldDesc in multRltScanDescs)
@@ -548,14 +548,19 @@ namespace ExcelTools
                                 {
                                     keyStrList.Add(param.Get<string>(fName));
                                 }
+
+                                var joinKey = string.Join(Comma, keyStrList);
+                                if (dicSingle.TryGetValue(joinKey, out var _value))
+                                { 
+                                    Utils.LogInfo($"关联key值：'{joinKey}' 重复!");
+                                    continue;
+                                }
+
                                 dicSingle.Add(string.Join(Comma,keyStrList), param.Get<string>(curFieldDesc.ValueFieldName));
                             }
 
                             multRltDic.Add($"{curFieldDesc.RelatedFullTbName}.{curFieldDesc.KeyFieldNamesStr}",dicSingle);//to do
                         }
-
-                       
-
 
                         /*
                          判断关联数据思路
