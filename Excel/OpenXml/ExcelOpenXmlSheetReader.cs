@@ -471,7 +471,7 @@ namespace Excel.OpenXml
                         }
                         else if (scanDescs[i].Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Encry.ToString()])) // 手机号加密
                         {
-                            rowRetDic.Add(scanDescs[i].FieldName, convertValue.ToString().ToPhoneCardNoEncryption());
+                            rowRetDic.Add(scanDescs[i].FieldName, convertValue?.ToString().ToPhoneCardNoEncryption());
                         }
                         else if (scanDescs[i].Prefix.Contains(ExcelTools.Utils.Config[EnumIdentifier.Password.ToString()])) //密码加盐
                         {
