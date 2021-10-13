@@ -12,6 +12,8 @@ using Excel.OpenXml;
 using Excel.Utils;
 using MySql.Data.MySqlClient;
 using static System.Int32;
+using System.Xml.Linq;
+using ExcelTools.SqlScheme;
 
 namespace ExcelTools
 {
@@ -47,6 +49,9 @@ namespace ExcelTools
         public Form1()
         {
             InitializeComponent();
+
+            TxtDirPath.Text = ReadPathFromXml();
+
             OrgsInit();
         }
 
@@ -60,6 +65,45 @@ namespace ExcelTools
             TxtMaxErrorCount.Enabled = true;
             HasPassFileValid = false;
         }
+
+        private string ReadPathFromXml()
+        {
+            /*
+             编写程序的时候，经常需要用的项目根目录。自己总结如下
+             1、取得控制台应用程序的根目录方法
+                 方法1、Environment.CurrentDirectory 取得或设置当前工作目录的完整限定路径
+                 方法2、AppDomain.CurrentDomain.BaseDirectory 获取基目录，它由程序集冲突解决程序用来探测程序集
+             2、取得Web应用程序的根目录方法
+                 方法1、HttpRuntime.AppDomainAppPath.ToString();//获取承载在当前应用程序域中的应用程序的应用程序目录的物理驱动器路径。用于App_Data中获取
+                 方法2、Server.MapPath("") 或者 Server.MapPath("~/");//返回与Web服务器上的指定的虚拟路径相对的物理文件路径
+                 方法3、Request.ApplicationPath;//获取服务器上ASP.NET应用程序的虚拟应用程序根目录
+             3、取得WinForm应用程序的根目录方法  下面5个都是这个 //E:\MyProject\ExcelToDbTools\bin\Debug\netcoreapp3.1
+                 1、Environment.CurrentDirectory.ToString();//获取或设置当前工作目录的完全限定路径
+                 2、Application.StartupPath.ToString();//获取启动了应用程序的可执行文件的路径，不包括可执行文件的名称
+                 3、Directory.GetCurrentDirectory();//获取应用程序的当前工作目录
+                 4、AppDomain.CurrentDomain.BaseDirectory;//获取基目录，它由程序集冲突解决程序用来探测程序集
+                 5、AppDomain.CurrentDomain.SetupInformation.ApplicationBase;//获取或设置包含该应用程序的目录的名称
+             */
+            XDocument xdoc = XDocument.Load(Path.Combine(Utils.WorkDirPath, "AppSettings.xml"));
+            XElement xeleRoot = xdoc.Root;
+            XElement xelePath = xeleRoot.Elements("FilePath").Single();
+
+            return xelePath.Value;
+        }
+
+        private void SavePathToXml(string absPath)
+        {
+            XDocument xdoc = XDocument.Load(Path.Combine(Utils.WorkDirPath, "AppSettings.xml"));
+            XElement xeleRoot = xdoc.Root;
+            XElement xelePath = xeleRoot.Elements("FilePath").Single();
+            
+            //xelePath.ReplaceWith(new XElement("FilePath", absPath));
+            xelePath.SetValue(absPath);
+
+            xdoc.Save(Path.Combine(Utils.WorkDirPath, "AppSettings.xml"));
+        }
+
+
 
         /// <summary>
         /// 点击开始导入
@@ -217,7 +261,7 @@ namespace ExcelTools
         /// <summary>
         /// 校验前初始化
         /// </summary>
-        public static void ValidateInit()
+        public void ValidateInit()
         {
             HasPassFileValid = false;
             MaxErrorCount = 0;
@@ -229,6 +273,12 @@ namespace ExcelTools
             ExecSqlFinalDic = new Dictionary<string, ReadExcelDataRet>();
             UniqDataDic = new Dictionary<string, List<string>>();
             RelatedDataDic = new Dictionary<string, Dictionary<string, string>>();
+
+            //如果输入路径和上次路径不同，记录到xml里面
+            var inputPath = TxtDirPath.Text;
+            var xmlPath = ReadPathFromXml();
+            if(!xmlPath.Equals(inputPath))
+                SavePathToXml(inputPath);
         }
 
         /// <summary>

@@ -1,12 +1,14 @@
 ﻿using System;
 using System.IO;
+using System.Windows.Forms;
 using Microsoft.Extensions.Configuration;
 
 namespace ExcelTools
 {
     public static class Utils
     {
-        public static string BasePath = AppDomain.CurrentDomain.BaseDirectory;
+        public static string RunBasePath = AppDomain.CurrentDomain.BaseDirectory;
+        public static string WorkDirPath = string.Empty;
 
         public static IConfigurationRoot Config;
         public static bool IsRecordLog;
@@ -16,6 +18,23 @@ namespace ExcelTools
             var configurationBuilder = new ConfigurationBuilder().SetBasePath(Directory.GetCurrentDirectory()).AddJsonFile("AppSettings.Json");
             Config = configurationBuilder.Build();
             IsRecordLog = Config["IsRecordLog"] == "1";
+            WorkDirPath = GetApplicationPath();
+        }
+
+        private static string GetApplicationPath()
+        {
+            string path = Application.StartupPath;
+
+            if (!path.Contains("bin"))
+                return path;
+
+            string folderName = String.Empty;
+            while (folderName.ToLower() != "bin")
+            {
+                path = path.Substring(0, path.LastIndexOf("\\"));
+                folderName = path.Substring(path.LastIndexOf("\\") + 1);
+            }
+            return path.Substring(0, path.LastIndexOf("\\") + 1);
         }
 
         public static void Reload()
@@ -43,7 +62,7 @@ namespace ExcelTools
         public static void WriteLogLine(string msg,bool timeFlag=true)
         {
             string logName = DateTime.Now.ToString("yyyyMMdd");
-            string logFilePath = Path.Combine(BasePath, "log", logName + ".txt");
+            string logFilePath = Path.Combine(RunBasePath, "log", logName + ".txt");
             if (!File.Exists(logFilePath))
             {
                 using (File.Create(logFilePath))
