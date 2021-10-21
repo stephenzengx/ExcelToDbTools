@@ -258,8 +258,8 @@ namespace Excel.OpenXml
                     }
 
                     var rtbFullName = spitItems[1].ToLower()
-                        .Replace("ihdb_lgfy", config["ihdb_lgfy_replacedb"])
-                        .Replace("ihbase_lgfy", config["ihbase_lgfy_replacedb"]); //替换表中库名占位符;
+                        .Replace("cloudih", config["cloudih_replacedb"])
+                        .Replace("ihbase", config["ihbase_replacedb"]); //替换表中库名占位符;
                     if (!tbDbDescdic.TryGetValue(rtbFullName, out var rTbDesc))
                     {
                         ExcelTools.Utils.LogInfo($"表头 '{head}' 关联数据库表 '{rtbFullName}' 在数据库不存在,请检查");
