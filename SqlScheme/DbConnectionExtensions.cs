@@ -328,7 +328,11 @@ namespace ExcelTools
                 throw  new ArgumentException("keyFieldNameList error!");
             }
 
-            string tbsql = $"select CONCAT({string.Join(",',',", keyFieldNameList)}) as RKey, {valueFieldName} as RValue from {fullTbName} where {JGIDFieldName} = @JGID;";
+            string tbsql = $"select CONCAT({string.Join(",',',", keyFieldNameList)}) as RKey, {valueFieldName} as RValue from {fullTbName} ";
+            if (!fullTbName.Contains("t_base_hospital"))
+            {
+                tbsql += $"where {JGIDFieldName} = @JGID;";
+            }
 
             DynamicParameters parameters = new DynamicParameters();
             parameters.Add("JGID", JGID);
